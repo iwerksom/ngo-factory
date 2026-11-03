@@ -1,11 +1,11 @@
 <script lang="ts">
+	import { HONEYPOT_FIELD, MAX_LENGTH } from '#lib/submission.js';
 	import type { PageProps } from './$types';
 
 	let { form }: PageProps = $props();
 
 	const fields = [
 		{ name: 'ngo', label: 'Organisation', multiline: false },
-		{ name: 'contact', label: 'Contact email', multiline: false },
 		{ name: 'region', label: 'Region', multiline: false },
 		{ name: 'title', label: 'Project title', multiline: false },
 		{ name: 'problem', label: 'The problem', multiline: true },
@@ -22,31 +22,64 @@
 
 {#if form && 'issueBody' in form}
 	<section class="done">
-		<h2>Thanks, this is what would be filed</h2>
-		<p>In this hackathon build nothing is stored. The real build opens this GitHub issue:</p>
+		{#if form.filed}
+			<h2>Thanks, your project is filed</h2>
+			{#if form.issueUrl}
+				<p>
+					Follow it as a public GitHub issue: <a href={form.issueUrl} rel="external"
+						>{form.issueUrl}</a
+					>
+				</p>
+			{:else}
+				<p>GitHub accepted it but did not send back a link. Look for it in the project's issues.</p>
+			{/if}
+		{:else}
+			<h2>Thanks, this is what would be filed</h2>
+			<p>
+				Filing is switched off on this server, so nothing was filed. The issue would look like this:
+			</p>
+		{/if}
 		<h3>{form.issueTitle}</h3>
 		<pre>{form.issueBody}</pre>
 	</section>
 {:else}
 	<p>
 		Describe a problem in your community where AI could help. Volunteers and AI will refine it with
-		you before anything is built.
+		you before anything is built. Your project is published as a public GitHub issue and we reply
+		there, so do not put private details in the form.
 	</p>
+
+	{#if form && 'message' in form}
+		<p class="error" role="alert">{form.message}</p>
+	{/if}
 
 	<form method="POST">
 		{#each fields as field (field.name)}
 			<label>
 				{field.label}
 				{#if field.multiline}
-					<textarea name={field.name} rows="3" value={form?.value?.[field.name] ?? ''}></textarea>
+					<textarea
+						name={field.name}
+						rows="3"
+						maxlength={MAX_LENGTH[field.name]}
+						value={form?.value?.[field.name] ?? ''}></textarea>
 				{:else}
-					<input name={field.name} value={form?.value?.[field.name] ?? ''} />
+					<input
+						name={field.name}
+						maxlength={MAX_LENGTH[field.name]}
+						value={form?.value?.[field.name] ?? ''}
+					/>
 				{/if}
 				{#if form?.errors?.[field.name]}
 					<span class="error">{form.errors[field.name]}</span>
 				{/if}
 			</label>
 		{/each}
+		<div class="trap" aria-hidden="true">
+			<label
+				>Leave this empty <input name={HONEYPOT_FIELD} tabindex="-1" autocomplete="off" /></label
+			>
+		</div>
 		<button type="submit">Submit</button>
 	</form>
 {/if}
@@ -70,6 +103,14 @@
 		padding: 0.5rem;
 		border: 1px solid var(--line);
 		border-radius: 0.375rem;
+	}
+
+	.trap {
+		position: absolute;
+		left: -9999px;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
 	}
 
 	.error {
