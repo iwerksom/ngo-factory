@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_LENGTH, parseSubmission, toIssueBody } from './submission';
+import {
+	HONEYPOT_FIELD,
+	looksAutomated,
+	MAX_LENGTH,
+	parseSubmission,
+	toIssueBody
+} from './submission';
 
 function form(fields: Record<string, string>): FormData {
 	const data = new FormData();
@@ -9,7 +15,6 @@ function form(fields: Record<string, string>): FormData {
 
 const valid = {
 	ngo: 'Green Valley Farmers',
-	contact: 'hello@example.org',
 	region: 'Kisumu, Kenya',
 	title: 'Crop weather mitigation',
 	problem: 'Sudden frost and drought spells destroy harvests.',
@@ -26,12 +31,13 @@ describe('parseSubmission', () => {
 
 	it('reports every missing field', () => {
 		const { errors } = parseSubmission(form({}));
-		expect(Object.keys(errors)).toHaveLength(7);
+		expect(Object.keys(errors)).toHaveLength(6);
 	});
 
-	it('rejects an invalid email', () => {
-		const { errors } = parseSubmission(form({ ...valid, contact: 'not-an-email' }));
-		expect(errors.contact).toMatch(/email/);
+	it('does not collect a contact address', () => {
+		const { value } = parseSubmission(form({ ...valid, contact: 'hello@example.org' }));
+		expect(value).not.toHaveProperty('contact');
+		expect(toIssueBody(value)).not.toContain('hello@example.org');
 	});
 
 	it('accepts a field exactly at its limit', () => {
@@ -50,6 +56,17 @@ describe('parseSubmission', () => {
 		);
 		const { value } = parseSubmission(form({ ...valid, ...longest }));
 		expect(toIssueBody(value).length).toBeLessThan(65_536 / 4);
+	});
+});
+
+describe('looksAutomated', () => {
+	it('is false when the trap field is absent or empty', () => {
+		expect(looksAutomated(form(valid))).toBe(false);
+		expect(looksAutomated(form({ ...valid, [HONEYPOT_FIELD]: '   ' }))).toBe(false);
+	});
+
+	it('is true when the trap field has any content', () => {
+		expect(looksAutomated(form({ ...valid, [HONEYPOT_FIELD]: 'http://spam.example' }))).toBe(true);
 	});
 });
 

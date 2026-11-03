@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { MAX_LENGTH } from '#lib/submission.js';
+	import { HONEYPOT_FIELD, MAX_LENGTH } from '#lib/submission.js';
 	import type { PageProps } from './$types';
 
 	let { form }: PageProps = $props();
 
 	const fields = [
 		{ name: 'ngo', label: 'Organisation', multiline: false },
-		{ name: 'contact', label: 'Contact email', multiline: false },
 		{ name: 'region', label: 'Region', multiline: false },
 		{ name: 'title', label: 'Project title', multiline: false },
 		{ name: 'problem', label: 'The problem', multiline: true },
@@ -46,8 +45,8 @@
 {:else}
 	<p>
 		Describe a problem in your community where AI could help. Volunteers and AI will refine it with
-		you before anything is built. Your project is published as a public GitHub issue. Your contact
-		email is not published, and this build does not store it.
+		you before anything is built. Your project is published as a public GitHub issue and we reply
+		there, so do not put private details in the form.
 	</p>
 
 	{#if form && 'message' in form}
@@ -76,6 +75,11 @@
 				{/if}
 			</label>
 		{/each}
+		<div class="trap" aria-hidden="true">
+			<label
+				>Leave this empty <input name={HONEYPOT_FIELD} tabindex="-1" autocomplete="off" /></label
+			>
+		</div>
 		<button type="submit">Submit</button>
 	</form>
 {/if}
@@ -99,6 +103,14 @@
 		padding: 0.5rem;
 		border: 1px solid var(--line);
 		border-radius: 0.375rem;
+	}
+
+	.trap {
+		position: absolute;
+		left: -9999px;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
 	}
 
 	.error {

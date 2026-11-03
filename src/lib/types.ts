@@ -37,7 +37,6 @@ export interface Project {
 
 export interface Submission {
 	ngo: string;
-	contact: string;
 	region: string;
 	title: string;
 	problem: string;
