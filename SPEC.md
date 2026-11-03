@@ -48,6 +48,8 @@ Payments, user accounts, a project-building IDE, hosting delivered projects.
 - Read gates from labels, milestones, PRs and the Qodo review status via the GitHub API.
 - `ngo-project-kit` repo: `AGENTS.md` template, skills for spec, estimate and gate review, MCP configs for open data (weather, soil, maps).
 - Estimate versus actual comparison on delivered projects.
+- A private way to reach an NGO. The submit form collects no contact details, because nothing private can go in a public issue, so maintainers reply on the issue and the NGO needs a GitHub account for now.
+- Rate limiting on the submit form that survives restarts and works across server instances. Today it is in memory, per instance, with a hidden bot-trap field.
 
 ## Flagship example
 
