@@ -49,7 +49,7 @@ export function parseSubmission(form: FormData): { value: Submission; errors: Su
 	return { value, errors };
 }
 
-const ZERO_WIDTH_SPACE = '​';
+const ZERO_WIDTH_SPACE = '\u200b';
 
 /**
  * Makes text a stranger typed show up as plain text in a public GitHub issue: no mentions, issue
@@ -60,12 +60,14 @@ export function escapeMarkdown(text: string): string {
 	return (
 		text
 			.replace(/\r\n?/g, '\n')
+			// Leading indentation means nothing in plain text, and four spaces would start a code block.
+			.replace(/^[ \t]+/gm, '')
 			// Characters that start inline Markdown: emphasis, code, links, images, HTML, tables.
 			.replace(/[\\`*_[\]<>|~]/g, '\\$&')
 			// Block starts at the beginning of a line: headings, quotes, bullets, rules.
-			.replace(/^([ \t]*)([#>+\-=])/gm, '$1\\$2')
+			.replace(/^([#>+\-=])/gm, '\\$1')
 			// Numbered lists.
-			.replace(/^([ \t]*\d+)([.)])/gm, '$1\\$2')
+			.replace(/^(\d+)([.)])/gm, '$1\\$2')
 			// A zero-width space after the trigger stops GitHub from linking or notifying.
 			.replace(/@/g, `@${ZERO_WIDTH_SPACE}`)
 			.replace(/#(?=\d)/g, `#${ZERO_WIDTH_SPACE}`)

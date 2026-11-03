@@ -86,13 +86,13 @@ describe('escapeMarkdown', () => {
 	});
 
 	it('breaks @mentions so nobody is notified', () => {
-		expect(escapeMarkdown('ask @octocat')).toBe('ask @​octocat');
+		expect(escapeMarkdown('ask @octocat')).toBe('ask @\u200boctocat');
 		expect(escapeMarkdown('ask @octocat')).not.toMatch(/@[A-Za-z]/);
 	});
 
 	it('breaks issue and pull request references', () => {
 		for (const text of ['see #12', 'see GH-12', 'see owner/repo#12']) {
-			expect(escapeMarkdown(text)).toContain('​');
+			expect(escapeMarkdown(text)).toContain('\u200b');
 		}
 		expect(escapeMarkdown('see #12')).not.toMatch(/#\d/);
 		expect(escapeMarkdown('see GH-12')).not.toMatch(/GH-\d/i);
@@ -112,6 +112,12 @@ describe('escapeMarkdown', () => {
 		expect(escapeMarkdown('![x](http://t.example/p.png)')).toBe('!\\[x\\](http://t.example/p.png)');
 		expect(escapeMarkdown('a | b')).toBe('a \\| b');
 		expect(escapeMarkdown('**bold** _it_')).toBe('\\*\\*bold\\*\\* \\_it\\_');
+	});
+
+	it('drops leading indentation so nothing renders as a code block', () => {
+		expect(escapeMarkdown('a\n\n    **urgent**\n\t- item')).toBe(
+			'a\n\n\\*\\*urgent\\*\\*\n\\- item'
+		);
 	});
 
 	it('normalises Windows line endings', () => {
