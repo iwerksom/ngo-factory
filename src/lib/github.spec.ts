@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, GitHubError } from './github';
+import { createIssue, GitHubError, resolveTarget } from './github';
 
 const target = { repo: 'iwerksom/ngo-factory', token: 'secret-token' };
 const issue = { title: 'Crop weather', body: 'Body', labels: ['submission'] };
@@ -25,6 +25,20 @@ describe('createIssue', () => {
 		expect(init?.method).toBe('POST');
 		expect(JSON.parse(init?.body as string)).toEqual(issue);
 		expect((init?.headers as Record<string, string>).authorization).toBe('Bearer secret-token');
+	});
+
+	it('still succeeds, without a link, when GitHub created the issue but the reply is unreadable', async () => {
+		const fetchFn = vi.fn(
+			async () => new Response('<html>gateway hiccup</html>', { status: 201 })
+		) as unknown as typeof fetch;
+
+		await expect(createIssue(fetchFn, target, issue)).resolves.toEqual({ number: null, url: null });
+	});
+
+	it('ignores reply fields of the wrong type', async () => {
+		const created = await createIssue(respond(201, { number: '7', html_url: 7 }), target, issue);
+
+		expect(created).toEqual({ number: null, url: null });
 	});
 
 	it('throws with the status when GitHub rejects the request', async () => {
@@ -56,4 +70,35 @@ describe('createIssue', () => {
 			expect(fetchFn).not.toHaveBeenCalled();
 		}
 	);
+});
+
+describe('resolveTarget', () => {
+	it('is preview mode only when neither setting is present', () => {
+		expect(resolveTarget(undefined, undefined)).toEqual({ mode: 'preview' });
+	});
+
+	it('is live when both are present and valid', () => {
+		expect(resolveTarget('tok', 'iwerksom/ngo-factory')).toEqual({
+			mode: 'live',
+			target: { repo: 'iwerksom/ngo-factory', token: 'tok' }
+		});
+	});
+
+	it('flags a token without a repo as misconfigured', () => {
+		expect(resolveTarget('tok', undefined)).toEqual({
+			mode: 'misconfigured',
+			problem: 'GITHUB_ISSUES_REPO is not set'
+		});
+	});
+
+	it('flags a repo without a token as misconfigured', () => {
+		expect(resolveTarget(undefined, 'iwerksom/ngo-factory')).toEqual({
+			mode: 'misconfigured',
+			problem: 'GITHUB_TOKEN is not set'
+		});
+	});
+
+	it('flags a malformed repo as misconfigured', () => {
+		expect(resolveTarget('tok', 'not-a-repo').mode).toBe('misconfigured');
+	});
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MAX_LENGTH } from '#lib/submission.js';
 	import type { PageProps } from './$types';
 
 	let { form }: PageProps = $props();
@@ -22,16 +23,22 @@
 
 {#if form && 'issueBody' in form}
 	<section class="done">
-		{#if form.issueUrl}
+		{#if form.filed}
 			<h2>Thanks, your project is filed</h2>
-			<p>
-				Follow it as a public GitHub issue: <a href={form.issueUrl} rel="external"
-					>{form.issueUrl}</a
-				>
-			</p>
+			{#if form.issueUrl}
+				<p>
+					Follow it as a public GitHub issue: <a href={form.issueUrl} rel="external"
+						>{form.issueUrl}</a
+					>
+				</p>
+			{:else}
+				<p>GitHub accepted it but did not send back a link. Look for it in the project's issues.</p>
+			{/if}
 		{:else}
 			<h2>Thanks, this is what would be filed</h2>
-			<p>This server has no GitHub token, so nothing was filed. The issue would look like this:</p>
+			<p>
+				Filing is switched off on this server, so nothing was filed. The issue would look like this:
+			</p>
 		{/if}
 		<h3>{form.issueTitle}</h3>
 		<pre>{form.issueBody}</pre>
@@ -52,9 +59,17 @@
 			<label>
 				{field.label}
 				{#if field.multiline}
-					<textarea name={field.name} rows="3" value={form?.value?.[field.name] ?? ''}></textarea>
+					<textarea
+						name={field.name}
+						rows="3"
+						maxlength={MAX_LENGTH[field.name]}
+						value={form?.value?.[field.name] ?? ''}></textarea>
 				{:else}
-					<input name={field.name} value={form?.value?.[field.name] ?? ''} />
+					<input
+						name={field.name}
+						maxlength={MAX_LENGTH[field.name]}
+						value={form?.value?.[field.name] ?? ''}
+					/>
 				{/if}
 				{#if form?.errors?.[field.name]}
 					<span class="error">{form.errors[field.name]}</span>

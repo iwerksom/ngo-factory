@@ -12,6 +12,17 @@ const REQUIRED: Record<keyof Submission, string> = {
 	data: 'List the data you have or expect to use.'
 };
 
+/** Per-field limits. The longest possible issue body stays far below GitHub's 65,536 characters. */
+export const MAX_LENGTH: Record<keyof Submission, number> = {
+	ngo: 120,
+	contact: 254,
+	region: 120,
+	title: 120,
+	problem: 2000,
+	beneficiaries: 2000,
+	data: 2000
+};
+
 export function parseSubmission(form: FormData): { value: Submission; errors: SubmissionErrors } {
 	const value = {} as Submission;
 	const errors: SubmissionErrors = {};
@@ -20,9 +31,12 @@ export function parseSubmission(form: FormData): { value: Submission; errors: Su
 		const raw = form.get(key);
 		value[key] = typeof raw === 'string' ? raw.trim() : '';
 		if (!value[key]) errors[key] = REQUIRED[key];
+		else if (value[key].length > MAX_LENGTH[key]) {
+			errors[key] = `Keep this under ${MAX_LENGTH[key]} characters (it is ${value[key].length}).`;
+		}
 	}
 
-	if (value.contact && !/^\S+@\S+\.\S+$/.test(value.contact)) {
+	if (value.contact && !errors.contact && !/^\S+@\S+\.\S+$/.test(value.contact)) {
 		errors.contact = 'That does not look like an email address.';
 	}
 

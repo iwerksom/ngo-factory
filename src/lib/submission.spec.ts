@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSubmission, toIssueBody } from './submission';
+import { MAX_LENGTH, parseSubmission, toIssueBody } from './submission';
 
 function form(fields: Record<string, string>): FormData {
 	const data = new FormData();
@@ -32,6 +32,24 @@ describe('parseSubmission', () => {
 	it('rejects an invalid email', () => {
 		const { errors } = parseSubmission(form({ ...valid, contact: 'not-an-email' }));
 		expect(errors.contact).toMatch(/email/);
+	});
+
+	it('accepts a field exactly at its limit', () => {
+		const { errors } = parseSubmission(form({ ...valid, problem: 'x'.repeat(MAX_LENGTH.problem) }));
+		expect(errors).toEqual({});
+	});
+
+	it('rejects a field one character over its limit with a message naming the limit', () => {
+		const { errors } = parseSubmission(form({ ...valid, title: 'x'.repeat(MAX_LENGTH.title + 1) }));
+		expect(errors.title).toContain(String(MAX_LENGTH.title));
+	});
+
+	it('keeps the longest possible issue body well under the GitHub limit', () => {
+		const longest = Object.fromEntries(
+			Object.entries(MAX_LENGTH).map(([key, max]) => [key, 'x'.repeat(max)])
+		);
+		const { value } = parseSubmission(form({ ...valid, ...longest }));
+		expect(toIssueBody(value).length).toBeLessThan(65_536 / 4);
 	});
 });
 
