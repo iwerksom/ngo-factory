@@ -1,0 +1,11 @@
+{
+	"mcpServers": {
+		"qodo-managed-tools": {
+			"type": "http",
+			"url": "https://sdk.qodo.ai/v1/tools/mcp/",
+			"headers": {
+				"Authorization": "Bearer ${QODO_API_KEY}"
+			}
+		}
+	}
+}
