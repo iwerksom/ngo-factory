@@ -29,6 +29,9 @@ export function looksAutomated(form: FormData): boolean {
 	return typeof trap === 'string' && trap.trim() !== '';
 }
 
+/** Fields that are one line in the form. A crafted request can still put line breaks in them. */
+const SINGLE_LINE = new Set<keyof Submission>(['ngo', 'region', 'title']);
+
 export function parseSubmission(form: FormData): { value: Submission; errors: SubmissionErrors } {
 	const value = {} as Submission;
 	const errors: SubmissionErrors = {};
@@ -36,6 +39,7 @@ export function parseSubmission(form: FormData): { value: Submission; errors: Su
 	for (const key of Object.keys(REQUIRED) as (keyof Submission)[]) {
 		const raw = form.get(key);
 		value[key] = typeof raw === 'string' ? raw.trim() : '';
+		if (SINGLE_LINE.has(key)) value[key] = value[key].replace(/\s+/g, ' ');
 		if (!value[key]) errors[key] = REQUIRED[key];
 		else if (value[key].length > MAX_LENGTH[key]) {
 			errors[key] = `Keep this under ${MAX_LENGTH[key]} characters (it is ${value[key].length}).`;
@@ -45,20 +49,44 @@ export function parseSubmission(form: FormData): { value: Submission; errors: Su
 	return { value, errors };
 }
 
+const ZERO_WIDTH_SPACE = '​';
+
+/**
+ * Makes text a stranger typed show up as plain text in a public GitHub issue: no mentions, issue
+ * links, task-list boxes, headings, lists, links, images, tables or code. Bare URLs still link.
+ * The escapes are invisible once GitHub renders the issue.
+ */
+export function escapeMarkdown(text: string): string {
+	return (
+		text
+			.replace(/\r\n?/g, '\n')
+			// Characters that start inline Markdown: emphasis, code, links, images, HTML, tables.
+			.replace(/[\\`*_[\]<>|~]/g, '\\$&')
+			// Block starts at the beginning of a line: headings, quotes, bullets, rules.
+			.replace(/^([ \t]*)([#>+\-=])/gm, '$1\\$2')
+			// Numbered lists.
+			.replace(/^([ \t]*\d+)([.)])/gm, '$1\\$2')
+			// A zero-width space after the trigger stops GitHub from linking or notifying.
+			.replace(/@/g, `@${ZERO_WIDTH_SPACE}`)
+			.replace(/#(?=\d)/g, `#${ZERO_WIDTH_SPACE}`)
+			.replace(/\bGH-(?=\d)/gi, (match) => `${match}${ZERO_WIDTH_SPACE}`)
+	);
+}
+
 /** The body of the GitHub issue a submission becomes. */
 export function toIssueBody(s: Submission): string {
 	return [
 		`## Organisation`,
-		`${s.ngo} (${s.region})`,
+		`${escapeMarkdown(s.ngo)} (${escapeMarkdown(s.region)})`,
 		``,
 		`## Problem`,
-		s.problem,
+		escapeMarkdown(s.problem),
 		``,
 		`## Who benefits`,
-		s.beneficiaries,
+		escapeMarkdown(s.beneficiaries),
 		``,
 		`## Data`,
-		s.data,
+		escapeMarkdown(s.data),
 		``,
 		`## Gates`,
 		`- [x] Submitted`,
