@@ -23,10 +23,16 @@ npm run check && npm run lint && npm test && npm run build
 
 `.mcp.json` connects the Qodo managed tools to an MCP-capable coding agent such as Claude Code. This needs a Qodo account and an API key, which may incur costs. The app and its tests do not need it.
 
-Set the key in your environment (never in a file in this repo), then restart your agent:
+Put the key in Claude Code's local settings for this project, `.claude/settings.local.json`. `.gitignore` keeps that file out of git. Never put the key in any other file in the repo.
 
-```bash
-export QODO_API_KEY=...
+```json
+{
+	"env": {
+		"QODO_API_KEY": "paste-your-key-here"
+	}
+}
 ```
 
-The agent asks you to approve the project's MCP server the first time.
+Then restart your agent. It asks you to approve the project's MCP server the first time.
+
+This setup is tested in a Claude Code terminal session, not in the desktop app. Check it with `/mcp` inside a running session. `claude mcp list` still reports a missing `QODO_API_KEY` with this setup, so do not rely on it. You can also export `QODO_API_KEY` in your shell instead.
