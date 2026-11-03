@@ -25,7 +25,7 @@ Run `check`, `lint` and `test` before every PR.
 
 ## Safety
 
-- Never commit credentials. Use `.env` (ignored) and `$env/dynamic/private`.
+- Never commit credentials. Declare variables in `src/env.ts` with `defineEnvVars`, read them from `$app/env/private` (SvelteKit 3 has no `$env/*`), set them in `.env` (ignored) and list them in `.env.example`.
 - Do not add real payment handling, and do not collect personal data about farmers or other end users.
 - Any copy that gives advice to the public (for example crop actions) must keep the decision-support disclaimer.
 

@@ -22,16 +22,30 @@
 
 {#if form && 'issueBody' in form}
 	<section class="done">
-		<h2>Thanks, this is what would be filed</h2>
-		<p>In this hackathon build nothing is stored. The real build opens this GitHub issue:</p>
+		{#if form.issueUrl}
+			<h2>Thanks, your project is filed</h2>
+			<p>
+				Follow it as a public GitHub issue: <a href={form.issueUrl} rel="external"
+					>{form.issueUrl}</a
+				>
+			</p>
+		{:else}
+			<h2>Thanks, this is what would be filed</h2>
+			<p>This server has no GitHub token, so nothing was filed. The issue would look like this:</p>
+		{/if}
 		<h3>{form.issueTitle}</h3>
 		<pre>{form.issueBody}</pre>
 	</section>
 {:else}
 	<p>
 		Describe a problem in your community where AI could help. Volunteers and AI will refine it with
-		you before anything is built.
+		you before anything is built. Your project is published as a public GitHub issue. Your contact
+		email is not published, and this build does not store it.
 	</p>
+
+	{#if form && 'message' in form}
+		<p class="error" role="alert">{form.message}</p>
+	{/if}
 
 	<form method="POST">
 		{#each fields as field (field.name)}
