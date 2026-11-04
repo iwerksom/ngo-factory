@@ -32,6 +32,8 @@ export interface Project {
 	raisedUsd: number;
 	/** Months of support the NGO and volunteers commit to after delivery. */
 	supportMonths: number;
+	/** The submission issue in `GITHUB_ISSUES_REPO`. When set, the gates are read from its labels. */
+	issueNumber?: number;
 	gates: Gate[];
 }
 
