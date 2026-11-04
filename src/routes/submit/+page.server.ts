@@ -2,6 +2,7 @@ import { GITHUB_ISSUES_REPO, GITHUB_TOKEN } from '$app/env/private';
 import { fail } from '@sveltejs/kit';
 import { countRecentSubmissions, createIssue, resolveTarget } from '#lib/github.js';
 import { createRateLimiter } from '#lib/rate-limit.js';
+import { createSubmissionCap } from '#lib/submission-cap.js';
 import {
 	looksAutomated,
 	parseSubmission,
@@ -21,6 +22,7 @@ const HOUR = 60 * 60 * 1000;
 const OVERALL_PER_HOUR = 30;
 const perVisitor = createRateLimiter({ max: 3, windowMs: HOUR });
 const overall = createRateLimiter({ max: OVERALL_PER_HOUR, windowMs: HOUR });
+const cap = createSubmissionCap({ perVisitor, overall, max: OVERALL_PER_HOUR });
 
 export const actions: Actions = {
 	default: async ({ request, fetch, getClientAddress }) => {
@@ -69,14 +71,14 @@ export const actions: Actions = {
 				message: 'Too many submissions just now. Please try again in an hour.'
 			});
 
-		// A failed count must not lock everyone out: fall back to the in-memory cap below.
-		const recent = await countRecentSubmissions(fetch, target.target, HOUR).catch((error) => {
-			console.error('Could not count recent submissions', error);
-			return null;
-		});
-		if (recent !== null && recent >= OVERALL_PER_HOUR) return tooMany();
-
-		if (!overall.allow('all') || !perVisitor.allow(visitor)) return tooMany();
+		// A failed count must not lock everyone out: only the in-memory limits apply then.
+		const admitted = await cap.admit(visitor, () =>
+			countRecentSubmissions(fetch, target.target, HOUR).catch((error) => {
+				console.error('Could not count recent submissions', error);
+				return null;
+			})
+		);
+		if (!admitted) return tooMany();
 
 		try {
 			const issue = await createIssue(fetch, target.target, {
@@ -100,6 +102,8 @@ export const actions: Actions = {
 				message:
 					'We could not confirm that your project was filed. Check the GitHub issues before you submit it again.'
 			});
+		} finally {
+			cap.release();
 		}
 	}
 };
