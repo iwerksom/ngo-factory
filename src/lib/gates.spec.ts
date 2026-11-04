@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GATE_TEMPLATE, gatesAt, gatesFromLabels, loadTimeline } from './gates';
+import { GATE_TEMPLATE, gatesAt, gatesFromLabels, loadTimeline } from '#lib/gates.js';
 
 const statuses = (labels: string[]) => gatesFromLabels(labels).gates.map((gate) => gate.status);
 
@@ -127,5 +127,27 @@ describe('loadTimeline', () => {
 		expect(timeline.gates).toBe(seeded);
 		expect(timeline.source).toBe('simulated');
 		expect(timeline.note).toMatch(/could not be read/);
+	});
+
+	it('keeps real evidence links from the seed, but not its placeholder links', async () => {
+		const withEvidence = gatesAt('safety', {
+			submitted: { label: 'Issue #1', url: '#' },
+			refined: { label: 'spec.md', url: 'https://example.org/spec.md' },
+			estimated: { label: 'estimate.md', url: '#' }
+		});
+		const fetchFn = reply(200, { labels: [{ name: 'gate:estimated' }] });
+
+		const { gates } = await loadTimeline(
+			fetchFn,
+			{ gates: withEvidence, issueNumber: 4 },
+			'o/r',
+			undefined
+		);
+
+		expect(gates.find((gate) => gate.id === 'refined')?.evidence?.url).toBe(
+			'https://example.org/spec.md'
+		);
+		expect(gates.find((gate) => gate.id === 'estimated')?.evidence).toBeUndefined();
+		expect(gates[0].evidence?.url).toBe('https://github.com/o/r/issues/4');
 	});
 });

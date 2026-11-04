@@ -45,7 +45,7 @@ Each rule says where it applies and why it exists. Builders follow them; reviewe
 
 ## Conventions
 
-- Import app code with the `#lib` alias with the `.js` extension (for example `#lib/types.js`), not `$lib`. Link to internal pages with `resolve()` from `$app/paths`.
+- Import app code with the `#lib` alias with the `.js` extension (for example `#lib/types.js`), not `$lib`. New and edited files use it everywhere, also from one `src/lib` file to another; a few older `src/lib` files still import their neighbours as `./types` and are only changed when they are edited anyway. Link to internal pages with `resolve()` from `$app/paths`.
 - Svelte 5 runes only (`$state`, `$derived`, `$props`). No legacy `export let` or stores for local state.
 - Keep logic in plain TypeScript files under `src/lib` with a `.spec.ts` beside them. Components only render.
 - No new dependency without a reason in the PR description. Smaller is the goal.

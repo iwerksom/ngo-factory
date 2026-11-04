@@ -1,5 +1,5 @@
-import { getIssueLabels } from './github';
-import type { Decider, Gate, Project } from './types';
+import { getIssueLabels } from '#lib/github.js';
+import type { Decider, Gate, Project } from '#lib/types.js';
 
 export const GATE_TEMPLATE: {
 	id: string;
@@ -120,6 +120,11 @@ export async function loadTimeline(
 	try {
 		const labels = await getIssueLabels(fetchFn, { repo, token }, project.issueNumber);
 		const { gates, conflict } = gatesFromLabels(labels);
+		// Keep real links the seed already has. The seed's '#' links are placeholders.
+		for (const gate of gates) {
+			const known = project.gates.find((seeded) => seeded.id === gate.id)?.evidence;
+			if (known?.url.startsWith('https://')) gate.evidence = known;
+		}
 		gates[0].evidence = {
 			label: `Issue #${project.issueNumber}`,
 			url: `https://github.com/${repo}/issues/${project.issueNumber}`

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, getIssueLabels, GitHubError, resolveTarget } from './github';
+import { createIssue, getIssueLabels, GitHubError, resolveTarget } from '#lib/github.js';
 
 const target = { repo: 'iwerksom/ngo-factory', token: 'secret-token' };
 const issue = { title: 'Crop weather', body: 'Body', labels: ['submission'] };
