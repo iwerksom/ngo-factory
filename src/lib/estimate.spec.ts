@@ -7,7 +7,7 @@ import {
 	isDelivered,
 	tokenCostUsd,
 	verdict
-} from './estimate';
+} from '#lib/estimate.js';
 import type { Gate, Project } from './types';
 
 const project = {
@@ -145,7 +145,7 @@ describe('compareEstimate', () => {
 
 describe('the seeded delivered example', () => {
 	it('is delivered, has actuals and keeps funding progress within 0 to 1', async () => {
-		const { getProject } = await import('./data/projects');
+		const { getProject } = await import('#lib/data/projects.js');
 		const seeded = getProject('seed-bank-inventory')!;
 
 		expect(isDelivered(seeded)).toBe(true);
