@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import type { Verdict } from '#lib/estimate.js';
 	import type { Decider } from '#lib/types.js';
 	import type { PageProps } from './$types';
 
@@ -8,6 +9,11 @@
 	let estimate = $derived(project.estimate);
 
 	const million = (n: number) => `${n / 1_000_000}M`;
+	const verdictText: Record<Verdict, string> = {
+		under: 'Under the estimate',
+		within: 'Within the estimate',
+		over: 'Over the estimate'
+	};
 	const decider: Record<Decider, string> = {
 		ai: 'AI',
 		human: 'Human',
@@ -37,6 +43,29 @@
 	<dd>{estimate.confidence}</dd>
 </dl>
 <p><strong>Approach.</strong> {estimate.approach}</p>
+
+{#if data.comparison.kind !== 'none'}
+	<h2>Estimate versus actual <small>(simulated)</small></h2>
+	{#if data.comparison.kind === 'missing'}
+		<p class="meta">Actuals not recorded yet.</p>
+	{:else}
+		<table>
+			<thead>
+				<tr><th>Measure</th><th>Estimate</th><th>Actual</th><th>Result</th></tr>
+			</thead>
+			<tbody>
+				{#each data.comparison.rows as row (row.label)}
+					<tr>
+						<td>{row.label}</td>
+						<td>{row.low.toLocaleString('en')} to {row.high.toLocaleString('en')}</td>
+						<td>{row.actual.toLocaleString('en')}</td>
+						<td class={row.verdict}>{verdictText[row.verdict]}</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
+{/if}
 
 <h2>Funding <small>(simulated)</small></h2>
 <progress value={data.progress} max="1" aria-label="Funding progress"></progress>
@@ -85,6 +114,23 @@
 
 	dd {
 		margin: 0;
+	}
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+
+	th,
+	td {
+		text-align: left;
+		padding: 0.25rem 0.5rem 0.25rem 0;
+		border-bottom: 1px solid var(--line);
+	}
+
+	.over {
+		color: var(--warn);
+		font-weight: 600;
 	}
 
 	progress {

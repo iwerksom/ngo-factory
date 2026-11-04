@@ -20,6 +20,11 @@ export interface Estimate {
 	approach: string;
 }
 
+export interface Actual {
+	tokens: number;
+	humanHours: number;
+}
+
 export interface Project {
 	slug: string;
 	title: string;
@@ -32,6 +37,8 @@ export interface Project {
 	raisedUsd: number;
 	/** Months of support the NGO and volunteers commit to after delivery. */
 	supportMonths: number;
+	/** What a delivered project really used. Absent until someone records it. Simulated in the hackathon build. */
+	actual?: Actual;
 	gates: Gate[];
 }
 

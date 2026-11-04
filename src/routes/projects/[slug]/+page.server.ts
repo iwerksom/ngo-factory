@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { getProject } from '#lib/data/projects.js';
-import { fundingGoalUsd, fundingProgress, tokenCostUsd } from '#lib/estimate.js';
+import { compareEstimate, fundingGoalUsd, fundingProgress, tokenCostUsd } from '#lib/estimate.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ params }) => {
@@ -9,6 +9,7 @@ export const load: PageServerLoad = ({ params }) => {
 
 	return {
 		project,
+		comparison: compareEstimate(project),
 		goalUsd: fundingGoalUsd(project),
 		progress: fundingProgress(project),
 		tokenCostLowUsd: Math.round(tokenCostUsd(project.estimate.tokensLow)),
