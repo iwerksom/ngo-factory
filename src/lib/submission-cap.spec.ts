@@ -86,4 +86,19 @@ describe('createSubmissionCap', () => {
 		expect(await cap.admit('a', counting(29))).toBe(true);
 		expect(await cap.admit('b', counting(29))).toBe(false);
 	});
+
+	it('lets one visitor sending many requests at once use up only their own allowance', async () => {
+		const { cap, overall } = setup({ perVisitor: 3, overall: 30 });
+
+		// All 30 pass the first look, then wait for GitHub together.
+		const results = await Promise.all(
+			Array.from({ length: 30 }, () => cap.admit('a', async () => 0))
+		);
+
+		expect(results.filter(Boolean)).toHaveLength(3);
+		// 3 admitted, so 27 of the 30 overall slots are still there for other visitors.
+		for (let i = 0; i < 27; i++) expect(overall.allow('all')).toBe(true);
+		expect(overall.allow('all')).toBe(false);
+		expect(await setup().cap.admit('b', async () => 0)).toBe(true);
+	});
 });

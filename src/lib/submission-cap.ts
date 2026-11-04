@@ -36,9 +36,12 @@ export function createSubmissionCap(options: {
 			const recent = await countRecent();
 			if (recent !== null && recent + inFlight >= max) return false;
 
-			// The limits may have filled up while we waited for GitHub.
-			if (!overall.allow('all')) return false;
-			if (!perVisitor.allow(visitor)) return false;
+			// The limits may have filled up while we waited for GitHub. Look at both before recording
+			// either, so a refusal never uses up the other limit. There is no await from here to
+			// the end, so nothing can slip in between the look and the recording.
+			if (!overall.peek('all') || !perVisitor.peek(visitor)) return false;
+			overall.allow('all');
+			perVisitor.allow(visitor);
 
 			inFlight += 1;
 			return true;
