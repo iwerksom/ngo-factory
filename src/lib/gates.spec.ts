@@ -184,6 +184,38 @@ describe('loadTimeline', () => {
 			expect(fetchFn).toHaveBeenCalledTimes(3);
 		});
 
+		it('reads GitHub again when the clock has moved backward', async () => {
+			const fetchFn = reply(200, { labels: [{ name: 'gate:refined' }] });
+			await loadTimeline(fetchFn, project, 'o/r', undefined, 100_000);
+			await loadTimeline(fetchFn, project, 'o/r', undefined, 1000);
+			expect(fetchFn).toHaveBeenCalledTimes(2);
+		});
+
+		it('shares one read between overlapping calls for the same issue', async () => {
+			const fetchFn = reply(200, { labels: [{ name: 'gate:refined' }] });
+			await Promise.all([
+				loadTimeline(fetchFn, project, 'o/r', undefined, 1000),
+				loadTimeline(fetchFn, project, 'o/r', undefined, 1000),
+				loadTimeline(fetchFn, project, 'o/r', undefined, 1000)
+			]);
+			expect(fetchFn).toHaveBeenCalledTimes(1);
+		});
+
+		it('retries after an overlapping read fails', async () => {
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+			const failing = reply(404, {});
+			const results = await Promise.all([
+				loadTimeline(failing, project, 'o/r', undefined, 1000),
+				loadTimeline(failing, project, 'o/r', undefined, 1000)
+			]);
+			expect(failing).toHaveBeenCalledTimes(1);
+			expect(results.every((result) => result.note)).toBe(true);
+
+			const working = reply(200, { labels: [] });
+			await loadTimeline(working, project, 'o/r', undefined, 2000);
+			expect(working).toHaveBeenCalledTimes(1);
+		});
+
 		it('does not cache a failed read, and tries again on the next call', async () => {
 			vi.spyOn(console, 'error').mockImplementation(() => {});
 			const failed = await loadTimeline(reply(404, {}), project, 'o/r', undefined, 1000);

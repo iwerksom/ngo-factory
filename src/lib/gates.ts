@@ -107,14 +107,18 @@ export interface Timeline {
 const LABEL_CACHE_MS = 60_000;
 const labelCache = new Map<string, { labels: string[]; readAt: number }>();
 
+const inFlight = new Map<string, Promise<string[]>>();
+
 /** Forgets cached label reads. For tests. */
 export function clearLabelCache(): void {
 	labelCache.clear();
+	inFlight.clear();
 }
 
 /**
- * Labels cached for 60 seconds per repo and issue, in the memory of this instance only. A failed
- * read throws before anything is stored, so the next call tries GitHub again.
+ * Labels cached for 60 seconds per repo and issue, in the memory of this instance only. Overlapping
+ * calls for one issue share a single read. A failed read throws before anything is stored, so the
+ * next call tries GitHub again.
  */
 async function cachedIssueLabels(
 	fetchFn: typeof fetch,
@@ -125,10 +129,18 @@ async function cachedIssueLabels(
 ): Promise<string[]> {
 	const key = `${repo}#${issueNumber}`;
 	const hit = labelCache.get(key);
-	if (hit && now - hit.readAt < LABEL_CACHE_MS) return hit.labels;
-	const labels = await getIssueLabels(fetchFn, { repo, token }, issueNumber);
-	labelCache.set(key, { labels, readAt: now });
-	return labels;
+	// A negative age means the clock moved backward: treat it as stale.
+	if (hit && now - hit.readAt >= 0 && now - hit.readAt < LABEL_CACHE_MS) return hit.labels;
+	const pending = inFlight.get(key);
+	if (pending) return pending;
+	const read = getIssueLabels(fetchFn, { repo, token }, issueNumber)
+		.then((labels) => {
+			labelCache.set(key, { labels, readAt: now });
+			return labels;
+		})
+		.finally(() => inFlight.delete(key));
+	inFlight.set(key, read);
+	return read;
 }
 
 /**
