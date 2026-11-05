@@ -24,3 +24,63 @@ export function fundingProgress(project: Project): number {
 export function currentGate(gates: Gate[]): Gate | undefined {
 	return gates.find((gate) => gate.status === 'current');
 }
+
+export type Verdict = 'under' | 'within' | 'over';
+
+/** Where an actual value landed against an estimate range. Both ends of the range are inside it. */
+export function verdict(actual: number, low: number, high: number): Verdict {
+	if (!Number.isFinite(actual) || actual < 0) {
+		throw new RangeError(`Actual must be a number of zero or more, got ${actual}`);
+	}
+	if (actual < low) return 'under';
+	if (actual > high) return 'over';
+	return 'within';
+}
+
+/** Delivered means every gate has passed, including Delivered itself. */
+export function isDelivered(project: Pick<Project, 'gates'>): boolean {
+	return project.gates.length > 0 && project.gates.every((gate) => gate.status === 'passed');
+}
+
+export interface ComparisonRow {
+	label: string;
+	low: number;
+	high: number;
+	actual: number;
+	verdict: Verdict;
+}
+
+export type EstimateComparison =
+	{ kind: 'none' } | { kind: 'missing' } | { kind: 'recorded'; rows: ComparisonRow[] };
+
+/**
+ * Estimate next to actual for a delivered project. `none` before delivery, `missing` when it is
+ * delivered but nobody recorded actuals: that is not the same as an actual of zero.
+ */
+export function compareEstimate(
+	project: Pick<Project, 'gates' | 'estimate' | 'actual'>
+): EstimateComparison {
+	if (!isDelivered(project)) return { kind: 'none' };
+	if (!project.actual) return { kind: 'missing' };
+
+	const { estimate, actual } = project;
+	return {
+		kind: 'recorded',
+		rows: [
+			{
+				label: 'Tokens',
+				low: estimate.tokensLow,
+				high: estimate.tokensHigh,
+				actual: actual.tokens,
+				verdict: verdict(actual.tokens, estimate.tokensLow, estimate.tokensHigh)
+			},
+			{
+				label: 'Human hours',
+				low: estimate.humanHoursLow,
+				high: estimate.humanHoursHigh,
+				actual: actual.humanHours,
+				verdict: verdict(actual.humanHours, estimate.humanHoursLow, estimate.humanHoursHigh)
+			}
+		]
+	};
+}

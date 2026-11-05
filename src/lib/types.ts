@@ -20,6 +20,11 @@ export interface Estimate {
 	approach: string;
 }
 
+export interface Actual {
+	tokens: number;
+	humanHours: number;
+}
+
 export interface Project {
 	slug: string;
 	title: string;
@@ -34,6 +39,8 @@ export interface Project {
 	supportMonths: number;
 	/** The submission issue in `GITHUB_ISSUES_REPO`. When set, the gates are read from its labels. */
 	issueNumber?: number;
+	/** What a delivered project really used. Absent until someone records it. Simulated in the hackathon build. */
+	actual?: Actual;
 	gates: Gate[];
 }
 

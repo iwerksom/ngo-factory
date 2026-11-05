@@ -54,6 +54,32 @@ export const projects: Project[] = [
 			estimated: { label: 'estimate.md', url: '#' },
 			building: { label: 'PR #14: threshold engine', url: '#' }
 		})
+	},
+	{
+		slug: 'seed-bank-inventory',
+		title: 'Seed bank inventory',
+		ngo: 'Highland Seed Savers',
+		region: 'Cusco, Peru',
+		summary: 'Keep a shared, offline-friendly list of the seeds each member family stores.',
+		problem:
+			'Members keep seed stock in notebooks, so nobody knows which local varieties are running low or who could share some. The network wants one simple inventory that works on a phone with a weak connection.',
+		estimate: {
+			tokensLow: 3_000_000,
+			tokensHigh: 6_000_000,
+			humanHoursLow: 30,
+			humanHoursHigh: 50,
+			confidence: 'high',
+			approach:
+				'A small offline-first web app over a spreadsheet-like table. The model only helps with the first import of the notebooks.'
+		},
+		// Simulated: the only delivered example, so the estimate versus actual view has something to show.
+		actual: { tokens: 7_200_000, humanHours: 42 },
+		raisedUsd: 608,
+		supportMonths: 12,
+		gates: gatesAt('delivered', {
+			submitted: { label: 'Issue #3', url: '#' },
+			building: { label: 'PR #9: offline table', url: '#' }
+		}).map((gate) => ({ ...gate, status: 'passed' }))
 	}
 ];
 
