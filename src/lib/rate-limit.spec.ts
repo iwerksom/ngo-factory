@@ -54,4 +54,13 @@ describe('createRateLimiter', () => {
 		expect(limiter.allow('new')).toBe(true);
 		expect(limiter.allow('new')).toBe(false);
 	});
+
+	it('peek says what allow would say, without recording a hit', () => {
+		const limiter = createRateLimiter({ max: 1, windowMs: 1000, now: clock().now });
+
+		expect([limiter.peek('a'), limiter.peek('a')]).toEqual([true, true]);
+		expect(limiter.allow('a')).toBe(true);
+		expect(limiter.peek('a')).toBe(false);
+		expect(limiter.peek('b')).toBe(true);
+	});
 });

@@ -43,9 +43,14 @@ Each rule says where it applies and why it exists. Builders follow them; reviewe
 - **Applies to:** `src/env.ts`, `.env.example` and any server code that needs a key. Declare variables with `defineEnvVars`, read them from `$app/env/private` (SvelteKit 3 has no `$env/*`), set them in the ignored `.env`, and list them in `.env.example`.
 - **Why:** a committed credential is public the moment it is pushed.
 
+### 6. Local limits come before any GitHub call made for an anonymous visitor
+
+- **Applies to:** server code that calls the GitHub API with our token because someone loaded a page or sent a form, today the submit action (`src/lib/submission-cap.ts`) and the project page loader (`src/lib/gates.ts`).
+- **Why:** anyone can send requests, and our token has one shared hourly quota. A request that is going to be refused anyway must not spend it, or abuse turns into the next outage for real visitors. Refused requests also must not use up another visitor's allowance. Known gap: the project page loader still makes one read per page view and has no cache of its own.
+
 ## Conventions
 
-- Import app code with the `#lib` alias with the `.js` extension (for example `#lib/types.js`), not `$lib`. Link to internal pages with `resolve()` from `$app/paths`.
+- Import app code with the `#lib` alias with the `.js` extension (for example `#lib/types.js`), not `$lib`. New and edited files use it everywhere, also from one `src/lib` file to another; a few older `src/lib` files still import their neighbours as `./types` and are only changed when they are edited anyway. Link to internal pages with `resolve()` from `$app/paths`.
 - Svelte 5 runes only (`$state`, `$derived`, `$props`). No legacy `export let` or stores for local state.
 - Keep logic in plain TypeScript files under `src/lib` with a `.spec.ts` beside them. Components only render.
 - No new dependency without a reason in the PR description. Smaller is the goal.

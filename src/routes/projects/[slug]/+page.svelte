@@ -74,9 +74,19 @@
 	and 15% contingency.
 </p>
 
-<h2>Harness</h2>
+<h2>
+	Harness <small>({data.timeline.source === 'github' ? 'from GitHub labels' : 'simulated'})</small>
+</h2>
+{#if data.timeline.note}
+	<p class="meta">{data.timeline.note} Showing simulated data.</p>
+{/if}
+{#if data.timeline.conflict}
+	<p class="meta">
+		The issue has more than one gate label. The earliest gate is shown until a maintainer fixes it.
+	</p>
+{/if}
 <ol class="gates">
-	{#each project.gates as gate (gate.id)}
+	{#each data.timeline.gates as gate (gate.id)}
 		<li class={gate.status}>
 			<span class="dot" aria-hidden="true"></span>
 			<div>

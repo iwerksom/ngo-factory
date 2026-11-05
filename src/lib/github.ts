@@ -82,3 +82,99 @@ export async function createIssue(
 		url: typeof created?.html_url === 'string' ? created.html_url : null
 	};
 }
+
+export interface IssueSource {
+	/** `owner/name`. */
+	repo: string;
+	/** Only needed for a private repo; a public issue can be read without one. */
+	token?: string;
+}
+
+/** Label names on one issue. Throws a GitHubError when GitHub does not answer with them. */
+export async function getIssueLabels(
+	fetchFn: typeof fetch,
+	source: IssueSource,
+	number: number
+): Promise<string[]> {
+	if (!REPO_PATTERN.test(source.repo)) {
+		throw new GitHubError(`Invalid repo "${source.repo}", expected owner/name`);
+	}
+	if (!Number.isInteger(number) || number < 1) {
+		throw new GitHubError(`Invalid issue number ${number}`);
+	}
+
+	const headers: Record<string, string> = {
+		accept: 'application/vnd.github+json',
+		'x-github-api-version': '2022-11-28'
+	};
+	if (source.token) headers.authorization = `Bearer ${source.token}`;
+
+	const response = await fetchFn(`https://api.github.com/repos/${source.repo}/issues/${number}`, {
+		headers,
+		signal: AbortSignal.timeout(5000)
+	});
+	if (!response.ok) {
+		throw new GitHubError(`GitHub returned ${response.status}`, response.status);
+	}
+
+	const issue: { labels?: unknown } | null = await response.json().catch(() => null);
+	if (!Array.isArray(issue?.labels)) throw new GitHubError('GitHub reply had no labels');
+
+	return issue.labels.flatMap((label: unknown) => {
+		if (typeof label === 'string') return [label];
+		const name = (label as { name?: unknown } | null)?.name;
+		return typeof name === 'string' ? [name] : [];
+	});
+}
+
+/** Label that marks an issue as a submission. */
+export const SUBMISSION_LABEL = 'submission';
+
+/**
+ * How many submission issues were created in the last `windowMs`. GitHub is the record, so every
+ * server instance, and a restarted one, gives the same answer. Pull requests are not counted
+ * (GitHub lists them as issues). Throws a GitHubError when GitHub does not answer with a list.
+ */
+export async function countRecentSubmissions(
+	fetchFn: typeof fetch,
+	target: IssueTarget,
+	windowMs: number,
+	now: number = Date.now()
+): Promise<number> {
+	if (!REPO_PATTERN.test(target.repo)) {
+		throw new GitHubError(`Invalid repo "${target.repo}", expected owner/name`);
+	}
+
+	const since = new Date(now - windowMs).toISOString();
+	// `since` filters on last update, not on creation, so created_at is checked below. Newest first,
+	// and one page of 100 is far more than the cap.
+	const query = new URLSearchParams({
+		labels: SUBMISSION_LABEL,
+		state: 'all',
+		sort: 'created',
+		direction: 'desc',
+		per_page: '100',
+		since
+	});
+	const response = await fetchFn(`https://api.github.com/repos/${target.repo}/issues?${query}`, {
+		headers: {
+			accept: 'application/vnd.github+json',
+			authorization: `Bearer ${target.token}`,
+			'x-github-api-version': '2022-11-28'
+		},
+		signal: AbortSignal.timeout(5000)
+	});
+	if (!response.ok) {
+		throw new GitHubError(`GitHub returned ${response.status}`, response.status);
+	}
+
+	const issues: unknown = await response.json().catch(() => null);
+	if (!Array.isArray(issues)) throw new GitHubError('GitHub reply was not a list of issues');
+
+	const cutoff = now - windowMs;
+	return issues.filter((issue: { pull_request?: unknown; created_at?: unknown } | null) => {
+		if (!issue || issue.pull_request) return false;
+		const created = typeof issue.created_at === 'string' ? Date.parse(issue.created_at) : NaN;
+		return created > cutoff;
+	}).length;
+}
