@@ -83,6 +83,50 @@ export async function createIssue(
 	};
 }
 
+export interface IssueSource {
+	/** `owner/name`. */
+	repo: string;
+	/** Only needed for a private repo; a public issue can be read without one. */
+	token?: string;
+}
+
+/** Label names on one issue. Throws a GitHubError when GitHub does not answer with them. */
+export async function getIssueLabels(
+	fetchFn: typeof fetch,
+	source: IssueSource,
+	number: number
+): Promise<string[]> {
+	if (!REPO_PATTERN.test(source.repo)) {
+		throw new GitHubError(`Invalid repo "${source.repo}", expected owner/name`);
+	}
+	if (!Number.isInteger(number) || number < 1) {
+		throw new GitHubError(`Invalid issue number ${number}`);
+	}
+
+	const headers: Record<string, string> = {
+		accept: 'application/vnd.github+json',
+		'x-github-api-version': '2022-11-28'
+	};
+	if (source.token) headers.authorization = `Bearer ${source.token}`;
+
+	const response = await fetchFn(`https://api.github.com/repos/${source.repo}/issues/${number}`, {
+		headers,
+		signal: AbortSignal.timeout(5000)
+	});
+	if (!response.ok) {
+		throw new GitHubError(`GitHub returned ${response.status}`, response.status);
+	}
+
+	const issue: { labels?: unknown } | null = await response.json().catch(() => null);
+	if (!Array.isArray(issue?.labels)) throw new GitHubError('GitHub reply had no labels');
+
+	return issue.labels.flatMap((label: unknown) => {
+		if (typeof label === 'string') return [label];
+		const name = (label as { name?: unknown } | null)?.name;
+		return typeof name === 'string' ? [name] : [];
+	});
+}
+
 /** Label that marks an issue as a submission. */
 export const SUBMISSION_LABEL = 'submission';
 
