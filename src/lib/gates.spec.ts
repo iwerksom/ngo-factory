@@ -1,5 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
-import { GATE_TEMPLATE, gatesAt, gatesFromLabels, loadTimeline } from '#lib/gates.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+	GATE_TEMPLATE,
+	clearLabelCache,
+	gatesAt,
+	gatesFromLabels,
+	loadTimeline
+} from '#lib/gates.js';
 
 const statuses = (labels: string[]) => gatesFromLabels(labels).gates.map((gate) => gate.status);
 
@@ -67,6 +73,7 @@ describe('gatesFromLabels', () => {
 
 describe('loadTimeline', () => {
 	const seeded = gatesAt('safety');
+	beforeEach(clearLabelCache);
 	const reply = (status: number, json: unknown) =>
 		vi.fn(async () => new Response(JSON.stringify(json), { status })) as unknown as typeof fetch;
 
@@ -149,5 +156,43 @@ describe('loadTimeline', () => {
 		);
 		expect(gates.find((gate) => gate.id === 'estimated')?.evidence).toBeUndefined();
 		expect(gates[0].evidence?.url).toBe('https://github.com/o/r/issues/4');
+	});
+
+	describe('cache', () => {
+		const project = { gates: seeded, issueNumber: 4 };
+
+		it('reads GitHub once for the same issue within 60 seconds', async () => {
+			const fetchFn = reply(200, { labels: [{ name: 'gate:refined' }] });
+			const first = await loadTimeline(fetchFn, project, 'o/r', undefined, 1000);
+			const second = await loadTimeline(fetchFn, project, 'o/r', undefined, 60_999);
+			expect(fetchFn).toHaveBeenCalledTimes(1);
+			expect(second).toEqual(first);
+		});
+
+		it('reads GitHub again after 60 seconds', async () => {
+			const fetchFn = reply(200, { labels: [{ name: 'gate:refined' }] });
+			await loadTimeline(fetchFn, project, 'o/r', undefined, 1000);
+			await loadTimeline(fetchFn, project, 'o/r', undefined, 61_000);
+			expect(fetchFn).toHaveBeenCalledTimes(2);
+		});
+
+		it('caches different issues and repos separately', async () => {
+			const fetchFn = reply(200, { labels: [] });
+			await loadTimeline(fetchFn, project, 'o/r', undefined, 1000);
+			await loadTimeline(fetchFn, { gates: seeded, issueNumber: 5 }, 'o/r', undefined, 1000);
+			await loadTimeline(fetchFn, project, 'o/other', undefined, 1000);
+			expect(fetchFn).toHaveBeenCalledTimes(3);
+		});
+
+		it('does not cache a failed read, and tries again on the next call', async () => {
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+			const failed = await loadTimeline(reply(404, {}), project, 'o/r', undefined, 1000);
+			expect(failed.note).toMatch(/could not be read/);
+
+			const working = reply(200, { labels: [{ name: 'gate:refined' }] });
+			const ok = await loadTimeline(working, project, 'o/r', undefined, 2000);
+			expect(working).toHaveBeenCalledTimes(1);
+			expect(ok.source).toBe('github');
+		});
 	});
 });
