@@ -1,6 +1,8 @@
 export interface RateLimiter {
 	/** Records a hit for `key` and returns true, or returns false when the key is over its limit. */
 	allow(key: string): boolean;
+	/** Whether `allow` would say yes right now, without recording a hit. */
+	peek(key: string): boolean;
 }
 
 const PRUNE_ABOVE = 500;
@@ -18,7 +20,14 @@ export function createRateLimiter(options: {
 	const { max, windowMs, now = Date.now } = options;
 	const hits = new Map<string, number[]>();
 
+	const recentHits = (key: string, t: number) =>
+		(hits.get(key) ?? []).filter((time) => t - time < windowMs);
+
 	return {
+		peek(key) {
+			return recentHits(key, now()).length < max;
+		},
+
 		allow(key) {
 			const t = now();
 
@@ -28,7 +37,7 @@ export function createRateLimiter(options: {
 				}
 			}
 
-			const recent = (hits.get(key) ?? []).filter((time) => t - time < windowMs);
+			const recent = recentHits(key, t);
 			if (recent.length >= max) {
 				hits.set(key, recent);
 				return false;

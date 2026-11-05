@@ -1,0 +1,39 @@
+## My ticketing connection
+
+Ticketing system: GitHub Issues in the project's own repo, https://github.com/iwerksom/ngo-factory (SPEC.md says GitHub is the source of truth, so the backlog lives there too).
+Connection used (MCP or CLI): CLI (`gh`) for the tickets, branches and PRs. Qodo review comes through the Qodo GitHub app on each PR.
+How I checked the agent could list and read my tickets: the repo had no open issues, so the agent and I first wrote three tickets with acceptance criteria and an edge or failure case each. `gh issue list` then listed #7, #8 and #9, and `gh issue view 7` read the title and body back. Honest gap: I only read #7 back through `gh`. For #8 and #9 the agent worked from the issue text it had just filed in the same session, not from a fresh read of GitHub.
+
+## Ticket → branch → PR
+
+### 1. Read the gate timeline from the project's issue labels
+
+Ticket link: https://github.com/iwerksom/ngo-factory/issues/7
+Branch and PR link: `feat/gates-from-labels`, https://github.com/iwerksom/ngo-factory/pull/10
+Acceptance criteria checked, with observed results and evidence: ran the dev server against the real issue #7 with a temporary `issueNumber`. No gate label: Vetted current. `gate:refined`: Refined current, earlier gates passed, later pending. Heading says "from GitHub labels". Unit tests cover the nine-gate mapping, `gate:delivered` (all passed), unknown labels ignored, and that the label text is only rendered as text.
+Relevant edge or failure case and result: `gate:refined` plus `gate:building` on the same issue showed Refined current with a note that the labels conflict (earliest wins, so progress is never overstated). A repo that does not exist (GitHub 404) gave HTTP 200 with the seeded timeline, the heading "simulated" and "Live status could not be read from GitHub right now."
+Qodo findings I investigated, including any missed or irrelevant feedback: three, all medium. (1) Missing `.js` on local imports: partly right, because AGENTS.md was ambiguous about relative imports between `src/lib` files; I fixed the new files and clarified AGENTS.md. (2) Home page cards still showed seeded gates: right, and I had listed it myself as a known gap; fixed. (3) Live timelines dropped the seed's evidence links: right; real `https://` links are kept, the seed's `#` placeholders are not. Qodo's re-review of the fix commit: no open findings. Missed by Qodo and me until I saw it while testing: GitHub caches unauthenticated reads for 60 seconds and allows 60 an hour, so a label change showed up a minute late.
+What reached the coding agent and what changed in the fix: the findings were read by the agent from the PR comment and each fix was tested (65 tests). The "answer or fix every Qodo comment" rule meant a PR comment per finding.
+
+### 2. Make the overall submission cap survive restarts and instances
+
+Ticket link: https://github.com/iwerksom/ngo-factory/issues/8
+Branch and PR link: `feat/shared-submission-cap`, https://github.com/iwerksom/ngo-factory/pull/11
+Acceptance criteria checked, with observed results and evidence: the overall hourly cap now counts the `submission` issues GitHub holds (no new dependency, no new storage). Unit tests: the counter ignores issues created an hour ago or more, pull requests and malformed entries, and two instances reading the same fake GitHub give the same count. Real run against this repo with a real token and the cap forced to 0: HTTP 429 and no issue filed.
+Relevant edge or failure case and result: with a bad token the count failed (401, logged without the body) and the form went on to try filing, giving the existing 502 message, so a read error does not lock everyone out. Not verified: the refusal at exactly 30 is a line in the route with no test, and I did not file 30 real issues.
+Qodo findings I investigated, including any missed or irrelevant feedback: first pass, three. (1) Locally refused requests still spent a GitHub read: right, fixed by checking the in-memory limits first (real run: three refused posts, zero GitHub reads in the log). (2) Pull requests could fill the 100-item page and hide submissions: technically true, not acted on, because only the form puts that label on anything, so it takes more than 70 labelled PRs in one hour. I count this as accurate but irrelevant here, and Qodo still lists it. (3) Two overlapping requests could both read 29: right on one instance, fixed with an in-flight count; across instances it cannot be atomic and the code says so. Second pass found a real bug in my own fix: a request refused by the per-visitor limit had already used up the overall allowance, so one visitor sending 30 at once could block everyone. I wrote the test first and it failed on the old code, then fixed it.
+What reached the coding agent and what changed in the fix: Qodo's "Fix Focus Areas" and recommended fix were enough to act on directly. The second-pass bug only exists because the first fix was written quickly, which is a fair argument for running review again after every fix.
+
+### 3. Show estimate versus actual on delivered projects
+
+Ticket link: https://github.com/iwerksom/ngo-factory/issues/9
+Branch and PR link: `feat/estimate-vs-actual`, https://github.com/iwerksom/ngo-factory/pull/12
+Acceptance criteria checked, with observed results and evidence: ran the dev server for each case. The simulated delivered example shows tokens 3,000,000 to 6,000,000 against 7,200,000 ("Over the estimate") and hours 30 to 50 against 42 ("Within the estimate"), labelled "(simulated)". A project that is not delivered has no section. The list page says "Delivered. Estimate versus actual is on its page (simulated)."
+Relevant edge or failure case and result: delivered with no actuals recorded showed "Actuals not recorded yet." (not zero). A recorded 0 showed 0 and "Under the estimate". An actual of -5 gave HTTP 500 with `RangeError: Actual must be a number of zero or more, got -5`, which is blunt (the whole page fails) but is what the ticket asked for.
+Qodo findings I investigated, including any missed or irrelevant feedback: one, the same `.js` import finding as on #10, right for the lines I added; fixed. It appeared again because the AGENTS.md clarification lives in #10 and this branch starts from `main`.
+What reached the coding agent and what changed in the fix: the finding was a rule violation, not a bug. Nothing here was missed by review that I know of; I did not check whether Qodo would have noticed the blunt 500.
+
+## What I learned
+
+Did the factory deliver what the tickets asked for? Yes for all three tickets as written, with the gaps listed above: the 30-issue refusal is untested, the project page still reads GitHub once per view with no cache of its own, and no seeded project is linked to a real issue yet, so every project page is still simulated until one is.
+What I updated in the rules, skills, or review setup, and why (or why no update was needed): AGENTS.md now says to use the `#lib` alias everywhere in new and edited files, because Qodo read the old wording two ways and flagged the same thing on two PRs. AGENTS.md also has a sixth rule, "Local limits come before any GitHub call made for an anonymous visitor", taken from Qodo's quota finding on #11; it names the project page loader as a known gap. No new skill. Qodo flagged something on all three PRs. Of the seven findings, five were right and led to a change, one was right but unreachable in this repo (the pull-request pagination one, which Qodo still lists on #11), and one was half right (it exposed the ambiguity in the import rule). One was a bug in my own earlier fix. After the fixes, Qodo's re-review shows no open findings on #10 and #12, and on #11 only the pagination one I chose not to act on. CI passes on all three. None of the three PRs is merged yet.
