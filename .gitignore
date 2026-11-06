@@ -24,3 +24,6 @@ vite.config.ts.timestamp-*
 
 # Claude
 .claude/settings.local.json
+
+# Agent poller runs
+/.agent-runs
