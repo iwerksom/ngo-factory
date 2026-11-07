@@ -130,14 +130,11 @@ pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq 
 [ -n "$pr" ] || stuck "no PR was opened for $branch"
 echo "== PR #$pr"
 
-# pending | failed | passed | none (no checks reported yet)
+# pending | failed | passed | none (no checks reported yet). The rules, and the tests
+# for them, are in scripts/ci-state.jq and scripts/ci-state.spec.ts: only a known
+# passing result counts as passed.
 ci_state() {
-	gh pr view "$pr" --repo "$REPO" --json statusCheckRollup --jq '
-		.statusCheckRollup as $c
-		| if ($c | length) == 0 then "none"
-		elif any($c[]; (.status // "COMPLETED") != "COMPLETED" or ((.state // "") | IN("PENDING", "EXPECTED"))) then "pending"
-		elif any($c[]; ((.conclusion // .state // "") | IN("FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"))) then "failed"
-		else "passed" end'
+	gh pr view "$pr" --repo "$REPO" --json statusCheckRollup --jq "$(cat "$ROOT/scripts/ci-state.jq")"
 }
 
 # Qodo review comments that name this exact commit in their marker.
