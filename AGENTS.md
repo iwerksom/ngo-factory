@@ -46,7 +46,7 @@ Each rule says where it applies and why it exists. Builders follow them; reviewe
 ### 6. Local limits come before any GitHub call made for an anonymous visitor
 
 - **Applies to:** server code that calls the GitHub API with our token because someone loaded a page or sent a form, today the submit action (`src/lib/submission-cap.ts`) and the project page loader (`src/lib/gates.ts`).
-- **Why:** anyone can send requests, and our token has one shared hourly quota. A request that is going to be refused anyway must not spend it, or abuse turns into the next outage for real visitors. Refused requests also must not use up another visitor's allowance. Known gap: the project page loader still makes one read per page view and has no cache of its own.
+- **Why:** anyone can send requests, and our token has one shared hourly quota. A request that is going to be refused anyway must not spend it, or abuse turns into the next outage for real visitors. Refused requests also must not use up another visitor's allowance. The project page loader caches each issue's label read for 60 seconds in memory; the cache is per instance and lost on restart, and a failed read is not cached. Overlapping requests for one issue share a single read. Known gap: each instance still makes one read per issue after a restart or once the minute is up.
 
 ## Conventions
 

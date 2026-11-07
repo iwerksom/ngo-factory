@@ -104,6 +104,45 @@ export interface Timeline {
 	note?: string;
 }
 
+const LABEL_CACHE_MS = 60_000;
+const labelCache = new Map<string, { labels: string[]; readAt: number }>();
+
+const inFlight = new Map<string, Promise<string[]>>();
+
+/** Forgets cached label reads. For tests. */
+export function clearLabelCache(): void {
+	labelCache.clear();
+	inFlight.clear();
+}
+
+/**
+ * Labels cached for 60 seconds per repo and issue, in the memory of this instance only. Overlapping
+ * calls for one issue share a single read. A failed read throws before anything is stored, so the
+ * next call tries GitHub again.
+ */
+async function cachedIssueLabels(
+	fetchFn: typeof fetch,
+	repo: string,
+	token: string | undefined,
+	issueNumber: number,
+	now: number
+): Promise<string[]> {
+	const key = `${repo}#${issueNumber}`;
+	const hit = labelCache.get(key);
+	// A negative age means the clock moved backward: treat it as stale.
+	if (hit && now - hit.readAt >= 0 && now - hit.readAt < LABEL_CACHE_MS) return hit.labels;
+	const pending = inFlight.get(key);
+	if (pending) return pending;
+	const read = getIssueLabels(fetchFn, { repo, token }, issueNumber)
+		.then((labels) => {
+			labelCache.set(key, { labels, readAt: now });
+			return labels;
+		})
+		.finally(() => inFlight.delete(key));
+	inFlight.set(key, read);
+	return read;
+}
+
 /**
  * The live timeline for a project that has an issue, or its seeded one. A GitHub failure falls
  * back to the seeded timeline: the page must not break because GitHub is slow or down.
@@ -112,13 +151,14 @@ export async function loadTimeline(
 	fetchFn: typeof fetch,
 	project: Pick<Project, 'gates' | 'issueNumber'>,
 	repo: string | undefined,
-	token: string | undefined
+	token: string | undefined,
+	now: number = Date.now()
 ): Promise<Timeline> {
 	const simulated: Timeline = { gates: project.gates, source: 'simulated', conflict: false };
 	if (project.issueNumber === undefined || !repo) return simulated;
 
 	try {
-		const labels = await getIssueLabels(fetchFn, { repo, token }, project.issueNumber);
+		const labels = await cachedIssueLabels(fetchFn, repo, token, project.issueNumber, now);
 		const { gates, conflict } = gatesFromLabels(labels);
 		// Keep real links the seed already has. The seed's '#' links are placeholders.
 		for (const gate of gates) {
