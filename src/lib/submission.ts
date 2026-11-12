@@ -1,4 +1,4 @@
-import type { Submission } from './types';
+import type { Submission } from '#lib/types.js';
 
 export type SubmissionErrors = Partial<Record<keyof Submission, string>>;
 

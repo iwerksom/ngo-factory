@@ -8,7 +8,7 @@ import {
 	tokenCostUsd,
 	verdict
 } from '#lib/estimate.js';
-import type { Gate, Project } from './types';
+import type { Gate, Project } from '#lib/types.js';
 
 const project = {
 	estimate: { tokensHigh: 10_000_000 },

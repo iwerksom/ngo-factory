@@ -6,7 +6,7 @@ import {
 	MAX_LENGTH,
 	parseSubmission,
 	toIssueBody
-} from './submission';
+} from '#lib/submission.js';
 
 function form(fields: Record<string, string>): FormData {
 	const data = new FormData();

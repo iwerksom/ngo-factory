@@ -1,4 +1,4 @@
-import type { Gate, Project } from './types';
+import type { Gate, Project } from '#lib/types.js';
 
 /** Blended price per million tokens across input, output and cache. A deliberately rough planning number. */
 export const USD_PER_MILLION_TOKENS = 8;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { greet } from './greet';
+import { greet } from '#lib/vitest-examples/greet.js';
 
 describe('greet', () => {
 	it('returns a greeting', () => {
