@@ -55,7 +55,7 @@ Each rule says where it applies and why it exists. Builders follow them; reviewe
 
 ## Conventions
 
-- Import app code with the `#lib` alias with the `.js` extension (for example `#lib/types.js`), not `$lib`. New and edited files use it everywhere, also from one `src/lib` file to another; a few older `src/lib` files still import their neighbours as `./types` and are only changed when they are edited anyway. Link to internal pages with `resolve()` from `$app/paths`.
+- Import app code with the `#lib` alias with the `.js` extension (for example `#lib/types.js`), not `$lib`. Use it everywhere, also from one `src/lib` file to another and in specs. `npm run lint` enforces it (`eslint.config.js`, tested in `scripts/import-alias.spec.ts`): no relative or `$lib` imports in `src/lib`, none that reach into `src/lib` from `src/routes`, and no `#lib` import without `.js` (assets such as `.svg` are fine). Sibling imports in `src/routes`, including SvelteKit's generated `./$types`, stay relative. Link to internal pages with `resolve()` from `$app/paths`.
 - Svelte 5 runes only (`$state`, `$derived`, `$props`). No legacy `export let` or stores for local state.
 - Keep logic in plain TypeScript files under `src/lib` with a `.spec.ts` beside them. Components only render.
 - No new dependency without a reason in the PR description. Smaller is the goal.
