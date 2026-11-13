@@ -61,6 +61,34 @@ Each rule says where it applies and why it exists. Builders follow them; reviewe
 - No new dependency without a reason in the PR description. Smaller is the goal.
 - Tabs, single quotes (Prettier decides; run `npm run format`).
 
+## Quality gate
+
+This is the definition of done for any review loop: a person or agent running Qodo local review on uncommitted changes (staged and unstaged), or working through Qodo's findings on a PR. `scripts/agent-poller.sh` applies it too.
+
+**Gate:** fix every _valid_ High or Medium finding, whatever its type (Bug, Rule violation, Requirement gap). Leave Low findings unchanged, and list every one of them for the owner.
+
+| Qodo shows (comment group, `action_level`)                   | Gate treats it as                           |
+| ------------------------------------------------------------ | ------------------------------------------- |
+| High, "Action required", `action_required`                   | High: must be settled                       |
+| Medium, "Remediation recommended", `remediation_recommended` | Medium: must be settled                     |
+| Low, "Informational" (raw `action_level` not seen yet)       | Low: flag, do not fix                       |
+| any other level, none, or a severity that cannot be read     | High: must be settled (fail closed, rule 7) |
+
+A finding's level is the group it is listed under in Qodo's "Code Review by Qodo" comment, which matches its `action_level`. If the two disagree, take the higher. Free text in a review's summary never lowers a level. The type is optional for the decision, because the gate covers every type: where shown, it comes from `finding_source`, where `IssueFinding` is a Bug, `ComplianceRule` a Rule violation and `ComplianceTicketRule` a Requirement gap. These mappings were read off Qodo's comment on PR 16 and its findings on PRs 5, 16 and 31, not from a Qodo document; if a level or type is unclear, say so in the report.
+
+"Settled" means **fixed** (the code or test change, and the check that now passes), or **disputed with evidence** (the file, line, probe or test output that shows the finding is wrong or already handled) **and the owner has seen that evidence and agreed**. Until the owner has agreed, a disputed High or Medium finding is still open. Test a claim before accepting or dismissing it.
+
+**Done requires all of these.** If one is missing, the status is **not done**, and the report says which and what is needed from the owner:
+
+1. No valid High or Medium finding is open.
+2. `npm run check`, `lint`, `test` and `build` pass on the final code.
+3. The latest completed Qodo review covers the final code: for uncommitted changes, a review of the final diff; for a PR, a review whose commit is the PR's current head (`get-pr-review-findings` names it). A review of an older commit, a timed-out wait or an unreadable result counts as no review.
+4. For a PR, the required CI checks are green on that head. (Uncommitted changes have no CI; item 2 is their evidence.)
+
+**Stop, do not loop.** At most two fix rounds on one change. If a third round would be needed, or a round fixes nothing, stop and report **not done** with the blocker.
+
+**Final report:** every finding with its type and level and what was done about it; the checks and their results; the latest review and the commit it covered; all Low findings, including unchanged Low Rule violations; anything unclear in a type or level for the owner to decide.
+
 ## Pull requests
 
 - One topic per PR, linked to an issue.
