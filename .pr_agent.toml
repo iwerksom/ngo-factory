@@ -1,0 +1,25 @@
+# Qodo review settings for NGO Factory. Qodo reads this file from the default branch
+# (`main`), so a change here applies to pull requests only after it is merged.
+# The product decisions below restate AGENTS.md (rules 1 to 7) and SPEC.md; if they
+# drift apart, AGENTS.md is the source. Display settings are deliberately not set here
+# (Day 11, issue 38): a change in what Qodo says must not be mixed up with how it looks.
+
+[review_agent]
+
+# Bugs, security, performance (the "issue finding" agent).
+issues_user_guidelines = """
+NGO Factory is a small non-profit platform; every submission ends up in a public GitHub issue.
+Product decisions to respect:
+- Text a stranger typed that is put into an issue or comment body must be escaped with escapeMarkdown (and line breaks collapsed in one-line fields). Flag any new path that skips it.
+- The platform takes no money and collects no personal data about end users. Flag forms, routes or storage that ask for contact details or payment.
+- Anything shown from src/lib/data (funding, estimates, actuals, gates, progress) is simulated and must say so wherever a visitor sees it. Flag a view that presents it without the "simulated" wording.
+- A visitor-facing statement must match what the page it points to shows. A card that promises a comparison or status the target page cannot show is a user-visible bug: treat it as at least Medium, not Low.
+- Server code that calls the GitHub API with our token for an anonymous visitor must check local limits first, so a refused request spends no quota.
+- Scripts that decide a ticket or PR is ready or passed (scripts/agent-poller.sh and similar) must fail closed: a timeout, a missing or unreadable signal, or an empty list is "stuck", never "ready", and a signal counts only for the exact head commit.
+"""
+
+# Rule checking (the "compliance" agent).
+compliance_user_guidelines = """
+Check the change against AGENTS.md in the repository root: its seven rules, its conventions (#lib imports with the .js extension, Svelte 5 runes only, logic in src/lib with a spec beside it) and its Quality gate. Name the rule number in each rule finding.
+Check that the PR description links its issue, says how it was verified and says what is not verified.
+"""
