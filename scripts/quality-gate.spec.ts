@@ -248,13 +248,26 @@ describe('Low findings for the ticket comment', () => {
 		expect(run.stdout).not.toContain('did not list its Low findings');
 	});
 
-	it('does not take a sentence that only mentions the words for a heading', () => {
+	it.each([
+		'The Low findings for the owner are below the line.',
+		'Low findings for the owner are listed in the PR comment above.'
+	])('does not take the prose line %j for the heading', (line) => {
 		const run = runShell(script(), 'true', {
-			'answer.txt':
-				'The Low findings for the owner are below the line.\n- src/a.ts:3 naming\n\nRESULT: no-open-findings\n'
+			'answer.txt': `${line}\n- src/a.ts:3 naming\n\nRESULT: no-open-findings\n`
 		});
 		expect(run.stdout).toContain('did not list its Low findings');
+		expect(run.stdout).not.toContain('- src/a.ts:3 naming');
 	});
+
+	it.each(['Low findings for the owner: none', '**Low findings for the owner:**'])(
+		'accepts %j as a heading',
+		(heading) => {
+			const run = runShell(script(), 'true', {
+				'answer.txt': `${heading}\n- src/a.ts:3 naming\n\nRESULT: no-open-findings\n`
+			});
+			expect(run.stdout).toContain('- src/a.ts:3 naming');
+		}
+	);
 
 	it('returns a section under the limit whole, with no cut notice', () => {
 		const run = runShell(script(), 'true', { 'answer.txt': answer });
@@ -278,7 +291,7 @@ describe('a stopped ticket keeps the Low list', () => {
 		`${shellFunction('post_low_report')}
 ${shellFunction('mark_stuck')}
 cleanup_worktree() { :; }
-issue=7 REPO=o/r log=/run/x.log claimed=1 pr=${JSON.stringify(pr)}
+issue=7 REPO=o/r log=/run/x.log claimed=1 pr=${JSON.stringify(pr)} LOW_POSTED=0
 LOW_REPORT=${JSON.stringify(low)}\nmark_stuck "an open High finding"\ncat "$DIR/calls"`;
 	const ghRecorder = 'printf "%s\\n" "$*" >> "$DIR/calls"';
 
@@ -300,6 +313,54 @@ LOW_REPORT=${JSON.stringify(low)}\nmark_stuck "an open High finding"\ncat "$DIR/
 		const prComments = run.stdout.split('\n').filter((l) => l.startsWith('pr comment 35'));
 		expect(prComments).toHaveLength(1);
 		expect(prComments[0]).toContain('- src/a.ts:3 naming');
+	});
+
+	it('does not post the list a second time when the ready path already did', () => {
+		// post_low_report succeeded, then a ticket call failed and the exit trap ran mark_stuck.
+		const run = runShell(
+			script('Low findings for the owner\n- src/a.ts:3 naming', '35').replace(
+				'mark_stuck "an open High finding"',
+				'post_low_report\nmark_stuck "ticket call failed"'
+			),
+			ghRecorder
+		);
+		expect(run.stdout.split('\n').filter((l) => l.startsWith('pr comment 35'))).toHaveLength(1);
+	});
+
+	it('tries the PR comment again in mark_stuck when the first post failed', () => {
+		const failingPrComment = `printf "%s\\n" "$*" >> "$DIR/calls"; [ "$1 $2" != "pr comment" ]`;
+		const run = runShell(
+			script('Low findings for the owner\n- src/a.ts:3 naming', '35').replace(
+				'mark_stuck "an open High finding"',
+				'post_low_report || true\nmark_stuck "post failed"'
+			),
+			failingPrComment
+		);
+		expect(run.stdout.split('\n').filter((l) => l.startsWith('pr comment 35'))).toHaveLength(2);
+	});
+
+	it("reports a failed round's own list, not the previous round's", () => {
+		// Both claude-failure paths go through stuck_after_round, which reads this round's output first.
+		expect(poller).toMatch(
+			/stuck_after_round\(\) \{\s+LOW_REPORT=\$\(low_findings_for_owner\)\s+stuck "\$1"\s+\}/
+		);
+		expect(poller).toMatch(
+			/\|\| stuck_after_round "claude exited with an error in the final check"/
+		);
+		expect(poller).toMatch(/\|\| stuck_after_round "claude exited with an error in round \$round"/);
+		expect(poller).not.toMatch(
+			/\|\| stuck "claude exited with an error in (the final check|round \$round)"/
+		);
+	});
+
+	it("uses this round's output when it stops after a failed round", () => {
+		const run = runShell(
+			`${shellFunction('low_findings_for_owner')}\n${shellFunction('stuck_after_round')}\nstuck() { echo "stuck:$1 list:$LOW_REPORT"; }\nROOT=${new URL('..', import.meta.url).pathname}\nout="$DIR/answer.txt" log=/run/x.log LOW_LIMIT=60000\nLOW_REPORT="OLD LIST from round 1"\nstuck_after_round "claude exited with an error in round 2"`,
+			'true',
+			{ 'answer.txt': 'Low findings for the owner\n- new.ts:1 from round 2\n' }
+		);
+		expect(run.stdout).toContain('- new.ts:1 from round 2');
+		expect(run.stdout).not.toContain('OLD LIST');
 	});
 
 	it('posts nothing on the PR when there is no PR yet or no list', () => {
