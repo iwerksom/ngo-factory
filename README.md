@@ -19,6 +19,10 @@ npm run dev
 npm run check && npm run lint && npm test && npm run build
 ```
 
+## Protected `main`
+
+A repository ruleset, "main ruleset", protects `main`: changes arrive through a pull request, the `verify` check (`check`, `lint`, `test`, `build`) must pass, and `main` cannot be deleted or force pushed. The ruleset has no bypass list, so the owner follows the same path. It does not require a Qodo review; that is a step of our workflow (see [docs/FACTORY.md](docs/FACTORY.md)), not a setting. Read it with `gh api repos/iwerksom/ngo-factory/rulesets`: classic `branches/main/protection` answers 404 because rulesets are not classic protection.
+
 ## Optional: Qodo tools for your coding agent
 
 `.mcp.json` connects the Qodo managed tools to an MCP-capable coding agent such as Claude Code. This needs a Qodo account and an API key, which may incur costs. The app and its tests do not need it.
