@@ -12,7 +12,11 @@
 #
 # What the agent may run is an allow-list of exact commands (see TOOLS_WORK): it can
 # push only its own branch and read only this PR's comments. That is a guard, not a
-# sandbox; it runs with your gh login, so also protect `main` with branch protection.
+# sandbox; it runs with your gh login, so `main` is also protected, by the repository ruleset
+# "main ruleset" (not classic branch protection, so `gh api .../branches/main/protection`
+# answers 404 even though it is on). It requires a pull request and the `verify` check, and
+# forbids deleting `main` and force pushes; nobody can bypass it, the owner included. It does
+# not require a completed Qodo review: this script waits for one and the owner checks it.
 set -euo pipefail
 
 REPO="${AGENT_REPO:-iwerksom/ngo-factory}"
