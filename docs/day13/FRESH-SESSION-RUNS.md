@@ -29,6 +29,7 @@ Result: **NOT DONE, 3 open Medium findings**, all raised on the current head (`O
 
 ## What was and was not verified
 
+- Transcript excerpts: [TRANSCRIPT-EXCERPTS.md](TRANSCRIPT-EXCERPTS.md).
 - Checked: the skill loads in a fresh process, the script runs, the Qodo tool is called, the head sha equals Qodo's reviewed sha, and the verdict follows the gate on real PRs. The script has a spec with a fake `gh` (a mutation of the unknown-state guard fails it).
 - Not checked: a PR where the answer is **DONE**. No open PR was in that state during the runs.
 - The agent saw no `Quality gate` section in `AGENTS.md` (it is in PR 35, not on `main`) and used the four lines in the skill, as the skill says.
