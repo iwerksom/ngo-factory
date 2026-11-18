@@ -145,9 +145,28 @@ ci_state() {
 	gh pr view "$pr" --repo "$REPO" --json statusCheckRollup --jq "$(cat "$ROOT/scripts/ci-state.jq")"
 }
 
-# The PR's current head commit.
+# The PR's current head commit. Fails (and prints nothing) when gh fails or returns no SHA, so
+# a caller can never mistake "could not read it" for "it changed" (rule 7, fail closed).
 head_sha() {
-	gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid
+	local sha
+	sha=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid) || return 1
+	[ -n "$sha" ] || return 1
+	echo "$sha"
+}
+
+# The "Low findings for the owner" part of the last round's answer, for the ticket comment. The
+# read-only final round cannot post a PR comment, and with AGENT_MAX_ROUNDS=0 no fix round runs,
+# so the poller carries the list itself. A missing section is said out loud, never read as "none".
+low_findings_for_owner() {
+	local section
+	# `|| true`: with pipefail a long section makes awk die of SIGPIPE when head stops reading;
+	# the text head kept is still wanted.
+	section=$(awk -f "$ROOT/scripts/low-findings.awk" "$out" | head -c 5000) || true
+	if [ -n "$section" ]; then
+		printf '%s' "$section"
+	else
+		printf 'The last round did not list its Low findings. Read the Qodo comment on the PR before you approve.'
+	fi
 }
 
 # Qodo review comments that name this exact commit in their marker.
@@ -183,12 +202,12 @@ for round in $(seq 1 $((MAX_ROUNDS + 1))); do
 	if [ "$final" = 1 ]; then
 		run_claude read "$COMMON
 
-PR #$pr has had $MAX_ROUNDS fix rounds. Do not change anything. Read CI (gh pr checks $pr) and Qodo's review comment (gh pr view $pr --comments). If CI is green and Qodo has no open High or Medium finding (Quality gate in AGENTS.md; a level you cannot read counts as High, and so does a disputed one the owner has not seen), end with RESULT: no-open-findings; otherwise end with RESULT: stuck: <the open High or Medium finding, or the failing CI>." | tee "$out" || stuck "claude exited with an error in the final check"
+PR #$pr has had $MAX_ROUNDS fix rounds. Do not change anything. Read CI (gh pr checks $pr) and Qodo's review comment (gh pr view $pr --comments). Judge by the Quality gate in AGENTS.md (a level you cannot read counts as High, and so does a disputed one the owner has not seen). Before the RESULT line, write a section headed 'Low findings for the owner' that lists every Low finding with its file and line ('none' if there are none); you cannot post comments, so the script copies this section to the ticket. If CI is green and Qodo has no open High or Medium finding, end with RESULT: no-open-findings; otherwise end with RESULT: stuck: <the open High or Medium finding, or the failing CI>." | tee "$out" || stuck "claude exited with an error in the final check"
 	else
 		head_before=$(head_sha)
 		run_claude work "$COMMON
 
-PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qodo review comment (gh pr view $pr --comments). For each finding note its level (the High, Medium or Low group it is listed under in Qodo's 'Code Review by Qodo' comment) and its type if the comment shows one, then apply the Quality gate in AGENTS.md: investigate whether it is real by reading the code or reproducing it; do not fix a finding you cannot confirm. Fix the confirmed High and Medium ones with a test that fails first where possible, rerun check, lint, test and build, commit, push, and answer each one in a PR comment (fixed, or why not). Do not change code for Low findings; list all of them in one PR comment headed 'Low findings for the owner' (write 'none' if there are none). A red CI run counts as a High finding. If every High and Medium finding is fixed and CI is green, end with RESULT: no-open-findings. If you dispute a High or Medium finding, it is not settled, because the owner decides: put your evidence in the PR comment and end with RESULT: stuck: disputed High or Medium finding needs the owner: <title>. If you pushed fixes, end with RESULT: fixed-needs-rereview. If you are blocked, RESULT: stuck: <reason>." | tee "$out" || stuck "claude exited with an error in round $round"
+PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qodo review comment (gh pr view $pr --comments). For each finding note its level (the High, Medium or Low group it is listed under in Qodo's 'Code Review by Qodo' comment) and its type if the comment shows one, then apply the Quality gate in AGENTS.md: investigate whether it is real by reading the code or reproducing it; do not fix a finding you cannot confirm. Fix the confirmed High and Medium ones with a test that fails first where possible, rerun check, lint, test and build, commit, push, and answer each one in a PR comment (fixed, or why not). Do not change code for Low findings; list all of them in one PR comment headed 'Low findings for the owner' (write 'none' if there are none), and repeat that list under the same heading in your final answer, before the RESULT line, because the script copies it to the ticket. A red CI run counts as a High finding. If every High and Medium finding is fixed and CI is green, end with RESULT: no-open-findings. If you dispute a High or Medium finding, it is not settled, because the owner decides: put your evidence in the PR comment and end with RESULT: stuck: disputed High or Medium finding needs the owner: <title>. If you pushed fixes, end with RESULT: fixed-needs-rereview. If you are blocked, RESULT: stuck: <reason>." | tee "$out" || stuck "claude exited with an error in round $round"
 	fi
 	result=$(final_result "$out") || stuck "round $round ended without a RESULT line"
 	case "$result" in
@@ -201,7 +220,9 @@ PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qod
 	fixed-needs-rereview)
 		[ "$final" = 1 ] && stuck "findings are still open on PR #$pr after $MAX_ROUNDS fix rounds"
 		# Quality gate: a round that fixes nothing stops the loop instead of spending the rest.
-		[ "$(head_sha)" != "$head_before" ] || stuck "round $round reported fixes but pushed no new commit to PR #$pr"
+		# Read the head on its own line: a failed lookup must stop the run, not look like a new commit.
+		head_after=$(head_sha) || stuck "could not read the head of PR #$pr after round $round"
+		[ "$head_after" != "$head_before" ] || stuck "round $round reported fixes but pushed no new commit to PR #$pr"
 		;;
 	stuck:*) stuck "$result" ;;
 	*) stuck "round $round returned an unknown result: $result" ;;
@@ -209,7 +230,9 @@ PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qod
 done
 
 gh issue edit "$issue" --repo "$REPO" --remove-label agent-working --add-label agent-review >/dev/null
-gh issue comment "$issue" --repo "$REPO" --body "PR #$pr is ready for your review. The agent does not merge." >/dev/null
+gh issue comment "$issue" --repo "$REPO" --body "PR #$pr is ready for your review. The agent does not merge.
+
+$(low_findings_for_owner)" >/dev/null
 claimed=0
 echo "== #$issue done $(date -Is): PR #$pr waits for you"
 cleanup_worktree

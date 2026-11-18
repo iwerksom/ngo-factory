@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -116,8 +118,103 @@ describe('scripts/agent-poller.sh', () => {
 		}
 	);
 
-	it('stops a fix round that pushed no new commit', () => {
+	it('stops a fix round that pushed no new commit, and a head it could not read', () => {
 		expect(poller).toMatch(/head_before=\$\(head_sha\)/);
-		expect(poller).toMatch(/\[ "\$\(head_sha\)" != "\$head_before" \] \|\| stuck/);
+		// The lookup is its own statement with `|| stuck`: inside `[ ... ]` a failure would look like a new commit.
+		expect(poller).toMatch(/head_after=\$\(head_sha\) \|\| stuck/);
+		expect(poller).toMatch(/\[ "\$head_after" != "\$head_before" \] \|\| stuck/);
+		expect(poller).not.toMatch(/\[ "\$\(head_sha\)" != /);
+	});
+
+	it('has the final read-only round and the fix round write the Low list the owner gets', () => {
+		// The final round cannot post a comment, and with AGENT_MAX_ROUNDS=0 no fix round runs.
+		expect(finalPrompt()).toMatch(/section headed 'Low findings for the owner'/);
+		expect(finalPrompt()).toMatch(/Before the RESULT line/);
+		expect(workPrompt()).toMatch(/repeat that list under the same heading in your final answer/);
+	});
+
+	it('copies the Low list into the ticket comment that says the PR is ready', () => {
+		expect(poller).toMatch(/is ready for your review[\s\S]*\$\(low_findings_for_owner\)/);
+	});
+});
+
+/** Source of a shell function defined in agent-poller.sh, so its real code runs in the tests below. */
+function shellFunction(name: string): string {
+	const match = poller.match(new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}$`, 'm'));
+	if (!match) throw new Error(`no function ${name}() in agent-poller.sh`);
+	return match[0];
+}
+
+/** Runs `script` under the poller's own shell options, in a directory with a fake `gh` first on PATH. */
+function runShell(script: string, ghBody: string, files: Record<string, string> = {}) {
+	const dir = mkdtempSync(join(tmpdir(), 'quality-gate-'));
+	try {
+		writeFileSync(join(dir, 'gh'), `#!/usr/bin/env bash\n${ghBody}\n`);
+		chmodSync(join(dir, 'gh'), 0o755);
+		for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+		return spawnSync('bash', ['-c', `set -euo pipefail\n${script}`], {
+			cwd: dir,
+			env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, DIR: dir },
+			encoding: 'utf8'
+		});
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+describe('head_sha (the "pushed nothing" guard reads it)', () => {
+	const script = () =>
+		`${shellFunction('head_sha')}\npr=35 REPO=o/r\nhead_after=$(head_sha) || { echo FAILED; exit 3; }\necho "got:$head_after"`;
+
+	it('returns the commit gh reports', () => {
+		const run = runShell(script(), 'echo abc123');
+		expect(run.stdout).toBe('got:abc123\n');
+	});
+
+	it.each([
+		['gh fails', 'exit 1'],
+		['gh prints nothing', 'true']
+	])('fails instead of returning an empty head when %s', (_name, ghBody) => {
+		const run = runShell(script(), ghBody);
+		expect(run.status).toBe(3);
+		expect(run.stdout).toBe('FAILED\n');
+	});
+});
+
+describe('Low findings for the ticket comment', () => {
+	const answer = [
+		'Everything else fixed.',
+		'',
+		'Low findings for the owner',
+		'- src/a.ts:3 naming',
+		'- src/b.ts:9 comment',
+		'',
+		'RESULT: no-open-findings'
+	].join('\n');
+	const script = () =>
+		`${shellFunction('low_findings_for_owner')}\nROOT=${new URL('..', import.meta.url).pathname}\nout="$DIR/answer.txt"\nlow_findings_for_owner`;
+
+	it('copies the section, and stops before the RESULT line', () => {
+		const run = runShell(script(), 'true', { 'answer.txt': answer });
+		expect(run.stdout).toContain('- src/a.ts:3 naming');
+		expect(run.stdout).toContain('- src/b.ts:9 comment');
+		expect(run.stdout).not.toContain('RESULT:');
+		expect(run.stdout).not.toContain('Everything else fixed');
+	});
+
+	it('says the list is missing, and does not claim there are none, when the section is absent', () => {
+		const run = runShell(script(), 'true', {
+			'answer.txt': 'All good.\n\nRESULT: no-open-findings\n'
+		});
+		expect(run.stdout).toContain('did not list its Low findings');
+		expect(run.stdout).not.toMatch(/\bnone\b/i);
+	});
+
+	it('keeps the start of a very long section instead of dropping it', () => {
+		const long = `Low findings for the owner\n${'- x.ts:1 note\n'.repeat(2000)}RESULT: no-open-findings\n`;
+		const run = runShell(script(), 'true', { 'answer.txt': long });
+		expect(run.stdout.length).toBeGreaterThan(1000);
+		expect(run.stdout.length).toBeLessThanOrEqual(5000);
+		expect(run.stdout).toContain('- x.ts:1 note');
 	});
 });
