@@ -23,7 +23,7 @@ Decides, with evidence, whether one PR meets this repo's Quality gate. It only r
 
 ## Steps
 
-1. **GitHub facts.** Run `.claude/skills/pr-gate-check/scripts/pr-state.sh <PR>` from the repo root. It prints `state`, `head`, `ci`, `required_checks`, `low_findings_comments`. If it prints `error=` or exits non-zero, **stop**: report NOT DONE with that error and ask the owner to check `gh auth status`. Do not guess a value.
+1. **GitHub facts.** Run `.claude/skills/pr-gate-check/scripts/pr-state.sh <PR>` from the repo root, as one command with nothing chained to it (no `;`, `&&`, `echo $?`): a chained command is not covered by the permission for this script and is refused. The tool result shows a non-zero exit code. It prints `state`, `head`, `ci`, `required_checks`, `low_findings_comments`. If it prints `error=` or exits non-zero, **stop**: report NOT DONE with that error and ask the owner to check `gh auth status`. Do not guess a value.
 2. **Qodo facts.** Call the MCP tool `get-pr-review-findings` with the full PR URL `https://github.com/iwerksom/ngo-factory/pull/<PR>`. If the tool is not available, **stop** and tell the owner the Qodo MCP server is not connected (see `.mcp.json`, README "Optional: Qodo tools"); do not read the review comment instead and call it a pass. Write down `review_session.commit_sha`, `status`, `review_complete`, and every finding's `title`, `finding_source`, `action_level` and `attribution_status`.
 3. **Compare, in this order, and write down each result:**
    - **Head match.** `review_session.commit_sha` must equal `head` from step 1, character for character. `review_session` null, a different sha, or `review_complete` false is a failed check (say which).
