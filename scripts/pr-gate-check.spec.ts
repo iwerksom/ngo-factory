@@ -142,5 +142,7 @@ describe('SKILL.md', () => {
 		expect(text).toContain('.claude/skills/pr-gate-check/scripts/pr-state.sh');
 		expect(text).toMatch(/Stop and ask, do not guess/);
 		expect(text).toMatch(/Any other value, or none, counts as High/);
+		// Seen in real Qodo data on PR 35; leaving it out made closed findings count as open.
+		expect(text).toMatch(/closed if `implemented`/);
 	});
 });
