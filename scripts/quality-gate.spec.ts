@@ -43,6 +43,7 @@ describe('AGENTS.md quality gate', () => {
 		expect(gate).toMatch(/fix every _valid_ High or Medium finding/);
 		expect(gate).toMatch(/Bug, Rule violation, Requirement gap/);
 		expect(gate).toMatch(/Leave Low findings unchanged, and list every one/);
+		expect(gate).toMatch(/put the list in one PR comment headed "Low findings for the owner"/);
 	});
 
 	it('fails closed on a level it cannot read', () => {
@@ -133,8 +134,23 @@ describe('scripts/agent-poller.sh', () => {
 		expect(workPrompt()).toMatch(/repeat that list under the same heading in your final answer/);
 	});
 
+	it("posts the final round's Low list as one PR comment, because that round cannot", () => {
+		expect(poller).toMatch(
+			/if \[ "\$final" = 1 \]; then\s+gh pr comment "\$pr" --repo "\$REPO" --body "\$LOW_REPORT"[^\n]*\|\| stuck/
+		);
+		expect(finalPrompt()).toMatch(/posts this section as one PR comment/);
+	});
+
+	it('takes the Low list from every round, before anything can stop the run', () => {
+		const take = poller.indexOf('LOW_REPORT=$(low_findings_for_owner)');
+		expect(take).toBeGreaterThan(-1);
+		expect(take).toBeLessThan(
+			poller.indexOf('result=$(final_result "$out") || stuck "round $round')
+		);
+	});
+
 	it('copies the Low list into the ticket comment that says the PR is ready', () => {
-		expect(poller).toMatch(/is ready for your review[\s\S]*\$\(low_findings_for_owner\)/);
+		expect(poller).toMatch(/is ready for your review[\s\S]*\$LOW_REPORT/);
 	});
 });
 
@@ -192,7 +208,7 @@ describe('Low findings for the ticket comment', () => {
 		'RESULT: no-open-findings'
 	].join('\n');
 	const script = () =>
-		`${shellFunction('low_findings_for_owner')}\nROOT=${new URL('..', import.meta.url).pathname}\nout="$DIR/answer.txt"\nlow_findings_for_owner`;
+		`${shellFunction('low_findings_for_owner')}\nROOT=${new URL('..', import.meta.url).pathname}\nout="$DIR/answer.txt" log=/run/x.log LOW_LIMIT=60000\nlow_findings_for_owner`;
 
 	it('copies the section, and stops before the RESULT line', () => {
 		const run = runShell(script(), 'true', { 'answer.txt': answer });
@@ -210,11 +226,41 @@ describe('Low findings for the ticket comment', () => {
 		expect(run.stdout).not.toMatch(/\bnone\b/i);
 	});
 
-	it('keeps the start of a very long section instead of dropping it', () => {
-		const long = `Low findings for the owner\n${'- x.ts:1 note\n'.repeat(2000)}RESULT: no-open-findings\n`;
+	it('returns a section under the limit whole, with no cut notice', () => {
+		const run = runShell(script(), 'true', { 'answer.txt': answer });
+		expect(run.stdout).not.toContain('Cut at');
+	});
+
+	it('cuts a section over the limit with a notice that names the log, never silently', () => {
+		const long = `Low findings for the owner\n${'- x.ts:1 note\n'.repeat(6000)}RESULT: no-open-findings\n`;
 		const run = runShell(script(), 'true', { 'answer.txt': long });
-		expect(run.stdout.length).toBeGreaterThan(1000);
-		expect(run.stdout.length).toBeLessThanOrEqual(5000);
 		expect(run.stdout).toContain('- x.ts:1 note');
+		expect(run.stdout).toContain(
+			'[Cut at 60000 characters. The full list is in the run log: /run/x.log]'
+		);
+		expect(run.stdout.length).toBeLessThan(60200);
+	});
+});
+
+describe('a stopped ticket keeps the Low list', () => {
+	// Runs the real mark_stuck with the worktree cleanup stubbed and `gh` recording its arguments.
+	const script = (low: string) =>
+		`${shellFunction('mark_stuck')}\ncleanup_worktree() { :; }\nissue=7 REPO=o/r log=/run/x.log claimed=1\nLOW_REPORT=${JSON.stringify(low)}\nmark_stuck "an open High finding"\ncat "$DIR/calls"`;
+	const ghRecorder = 'printf "%s\\n" "$*" >> "$DIR/calls"';
+
+	it('adds the list to the stopped-ticket comment, after the blocker', () => {
+		const run = runShell(script('Low findings for the owner\n- src/a.ts:3 naming'), ghRecorder);
+		expect(run.stdout).toContain('an open High finding');
+		expect(run.stdout).toContain('Low findings for the owner');
+		expect(run.stdout).toContain('- src/a.ts:3 naming');
+		expect(run.stdout.indexOf('an open High finding')).toBeLessThan(
+			run.stdout.indexOf('Low findings for the owner')
+		);
+	});
+
+	it('leaves the comment as it was when no round has produced a list yet', () => {
+		const run = runShell(script(''), ghRecorder);
+		expect(run.stdout).toContain('an open High finding');
+		expect(run.stdout).not.toContain('Low findings');
 	});
 });
