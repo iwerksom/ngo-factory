@@ -50,6 +50,7 @@ echo "== #$issue started $(date -Is); max $MAX_ROUNDS fix rounds, $WAIT_MINUTES 
 branch="agent/issue-$issue"
 work="$ROOT/../ngo-factory-agent-$issue"
 claimed=0
+pr="" # set once the PR exists; mark_stuck reads it
 
 cleanup_worktree() {
 	git -C "$ROOT" worktree remove --force "$work" >/dev/null 2>&1 || true
@@ -60,6 +61,13 @@ cleanup_worktree() {
 # on both ticket comments, ready and stuck, so a stopped run does not hide it.
 LOW_REPORT=""
 
+# Posts LOW_REPORT as the one PR comment with the Low findings (AGENTS.md, Quality gate). Only the
+# script posts it, once per run and from the last round's list, so the PR never holds two lists
+# from different commits. The agent writes the list in its answer and does not post it.
+post_low_report() {
+	gh pr comment "$pr" --repo "$REPO" --body "$LOW_REPORT" >/dev/null
+}
+
 # Relabel and explain. The branch stays (pushed commits are kept); the worktree goes,
 # so the ticket can be requeued.
 mark_stuck() {
@@ -69,6 +77,8 @@ mark_stuck() {
 	gh issue comment "$issue" --repo "$REPO" --body "The agent stopped and needs help: $1 (log: \`$log\` on the machine that ran it).${LOW_REPORT:+
 
 $LOW_REPORT}" >/dev/null || true
+	# A stopped run still gets its one PR comment, when a round produced a list and the PR exists.
+	if [ -n "$LOW_REPORT" ] && [ -n "$pr" ]; then post_low_report || true; fi
 	cleanup_worktree
 }
 stuck() { mark_stuck "$1"; exit 1; }
@@ -215,15 +225,10 @@ PR #$pr has had $MAX_ROUNDS fix rounds. Do not change anything. Read CI (gh pr c
 		head_before=$(head_sha)
 		run_claude work "$COMMON
 
-PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qodo review comment (gh pr view $pr --comments). For each finding note its level (the High, Medium or Low group it is listed under in Qodo's 'Code Review by Qodo' comment) and its type if the comment shows one, then apply the Quality gate in AGENTS.md: investigate whether it is real by reading the code or reproducing it; do not fix a finding you cannot confirm. Fix the confirmed High and Medium ones with a test that fails first where possible, rerun check, lint, test and build, commit, push, and answer each one in a PR comment (fixed, or why not). Do not change code for Low findings; list all of them in one PR comment headed 'Low findings for the owner' (write 'none' if there are none), and repeat that list under the same heading in your final answer, before the RESULT line, because the script copies it to the ticket. A red CI run counts as a High finding. If every High and Medium finding is fixed and CI is green, end with RESULT: no-open-findings. If you dispute a High or Medium finding, it is not settled, because the owner decides: put your evidence in the PR comment and end with RESULT: stuck: disputed High or Medium finding needs the owner: <title>. If you pushed fixes, end with RESULT: fixed-needs-rereview. If you are blocked, RESULT: stuck: <reason>." | tee "$out" || stuck "claude exited with an error in round $round"
+PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qodo review comment (gh pr view $pr --comments). For each finding note its level (the High, Medium or Low group it is listed under in Qodo's 'Code Review by Qodo' comment) and its type if the comment shows one, then apply the Quality gate in AGENTS.md: investigate whether it is real by reading the code or reproducing it; do not fix a finding you cannot confirm. Fix the confirmed High and Medium ones with a test that fails first where possible, rerun check, lint, test and build, commit, push, and answer each one in a PR comment (fixed, or why not). Do not change code for Low findings; list all of them in your final answer, before the RESULT line, under the heading 'Low findings for the owner' (write 'none' if there are none). Do not post them yourself: the script posts the list from the last round as one PR comment and copies it to the ticket. A red CI run counts as a High finding. If every High and Medium finding is fixed and CI is green, end with RESULT: no-open-findings. If you dispute a High or Medium finding, it is not settled, because the owner decides: put your evidence in the PR comment and end with RESULT: stuck: disputed High or Medium finding needs the owner: <title>. If you pushed fixes, end with RESULT: fixed-needs-rereview. If you are blocked, RESULT: stuck: <reason>." | tee "$out" || stuck "claude exited with an error in round $round"
 	fi
 	# Keep the round's Low list before anything can stop the run, so a stuck ticket carries it too.
 	LOW_REPORT=$(low_findings_for_owner)
-	# AGENTS.md, Quality gate: Low findings go to the owner in one PR comment. The work round posts its
-	# own; the read-only final round cannot, so the script posts it.
-	if [ "$final" = 1 ]; then
-		gh pr comment "$pr" --repo "$REPO" --body "$LOW_REPORT" >/dev/null || stuck "could not post the Low findings on PR #$pr"
-	fi
 	result=$(final_result "$out") || stuck "round $round ended without a RESULT line"
 	case "$result" in
 	no-open-findings)
@@ -244,6 +249,7 @@ PR #$pr is open for #$issue. Read the CI result (gh pr checks $pr) and every Qod
 	esac
 done
 
+post_low_report || stuck "could not post the Low findings on PR #$pr"
 gh issue edit "$issue" --repo "$REPO" --remove-label agent-working --add-label agent-review >/dev/null
 gh issue comment "$issue" --repo "$REPO" --body "PR #$pr is ready for your review. The agent does not merge.
 

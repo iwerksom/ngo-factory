@@ -65,7 +65,7 @@ Each rule says where it applies and why it exists. Builders follow them; reviewe
 
 This is the definition of done for any review loop: a person or agent running Qodo local review on uncommitted changes (staged and unstaged), or working through Qodo's findings on a PR. `scripts/agent-poller.sh` applies it too.
 
-**Gate:** fix every _valid_ High or Medium finding, whatever its type (Bug, Rule violation, Requirement gap). Leave Low findings unchanged, and list every one of them for the owner. On a PR, put the list in one PR comment headed "Low findings for the owner" (the poller posts it itself after its read-only final round, and also copies it to the ticket).
+**Gate:** fix every _valid_ High or Medium finding, whatever its type (Bug, Rule violation, Requirement gap). Leave Low findings unchanged, and list every one of them for the owner. On a PR, put the list in one PR comment headed "Low findings for the owner" (the poller posts the list from its last round itself, once, and copies it to the ticket; its agents only write the list in their answer).
 
 | Qodo shows (comment group, `action_level`)                   | Gate treats it as                           |
 | ------------------------------------------------------------ | ------------------------------------------- |

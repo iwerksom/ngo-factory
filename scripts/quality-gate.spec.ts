@@ -131,14 +131,21 @@ describe('scripts/agent-poller.sh', () => {
 		// The final round cannot post a comment, and with AGENT_MAX_ROUNDS=0 no fix round runs.
 		expect(finalPrompt()).toMatch(/section headed 'Low findings for the owner'/);
 		expect(finalPrompt()).toMatch(/Before the RESULT line/);
-		expect(workPrompt()).toMatch(/repeat that list under the same heading in your final answer/);
+		expect(workPrompt()).toMatch(
+			/list all of them in your final answer, before the RESULT line, under the heading 'Low findings for the owner'/
+		);
 	});
 
-	it("posts the final round's Low list as one PR comment, because that round cannot", () => {
-		expect(poller).toMatch(
-			/if \[ "\$final" = 1 \]; then\s+gh pr comment "\$pr" --repo "\$REPO" --body "\$LOW_REPORT"[^\n]*\|\| stuck/
-		);
+	it('lets only the script post the Low list, once, so the PR never holds two', () => {
+		// The agents write the list in their answer; neither prompt tells them to post it.
+		expect(workPrompt()).toMatch(/Do not post them yourself/);
+		expect(workPrompt()).not.toMatch(/in one PR comment headed/);
 		expect(finalPrompt()).toMatch(/posts this section as one PR comment/);
+		// One call site for the PR comment, and it is the function that the ready path calls.
+		expect(poller.match(/gh pr comment "\$pr"/g)).toHaveLength(1);
+		expect(poller).toMatch(
+			/post_low_report \|\| stuck[^\n]*\n\s*gh issue edit "\$issue"[^\n]*agent-review/
+		);
 	});
 
 	it('takes the Low list from every round, before anything can stop the run', () => {
@@ -226,6 +233,29 @@ describe('Low findings for the ticket comment', () => {
 		expect(run.stdout).not.toMatch(/\bnone\b/i);
 	});
 
+	it.each([
+		'Low findings for the owner',
+		'## Low findings for the owner',
+		'### Low findings for the owner:',
+		'**Low findings for the owner**',
+		'> - Low findings for the owner',
+		'LOW FINDINGS FOR THE OWNER'
+	])('finds the section when the heading is written as %j', (heading) => {
+		const run = runShell(script(), 'true', {
+			'answer.txt': `Fixed.\n\n${heading}\n- src/a.ts:3 naming\n\nRESULT: no-open-findings\n`
+		});
+		expect(run.stdout).toContain('- src/a.ts:3 naming');
+		expect(run.stdout).not.toContain('did not list its Low findings');
+	});
+
+	it('does not take a sentence that only mentions the words for a heading', () => {
+		const run = runShell(script(), 'true', {
+			'answer.txt':
+				'The Low findings for the owner are below the line.\n- src/a.ts:3 naming\n\nRESULT: no-open-findings\n'
+		});
+		expect(run.stdout).toContain('did not list its Low findings');
+	});
+
 	it('returns a section under the limit whole, with no cut notice', () => {
 		const run = runShell(script(), 'true', { 'answer.txt': answer });
 		expect(run.stdout).not.toContain('Cut at');
@@ -244,8 +274,12 @@ describe('Low findings for the ticket comment', () => {
 
 describe('a stopped ticket keeps the Low list', () => {
 	// Runs the real mark_stuck with the worktree cleanup stubbed and `gh` recording its arguments.
-	const script = (low: string) =>
-		`${shellFunction('mark_stuck')}\ncleanup_worktree() { :; }\nissue=7 REPO=o/r log=/run/x.log claimed=1\nLOW_REPORT=${JSON.stringify(low)}\nmark_stuck "an open High finding"\ncat "$DIR/calls"`;
+	const script = (low: string, pr = '') =>
+		`${shellFunction('post_low_report')}
+${shellFunction('mark_stuck')}
+cleanup_worktree() { :; }
+issue=7 REPO=o/r log=/run/x.log claimed=1 pr=${JSON.stringify(pr)}
+LOW_REPORT=${JSON.stringify(low)}\nmark_stuck "an open High finding"\ncat "$DIR/calls"`;
 	const ghRecorder = 'printf "%s\\n" "$*" >> "$DIR/calls"';
 
 	it('adds the list to the stopped-ticket comment, after the blocker', () => {
@@ -256,6 +290,23 @@ describe('a stopped ticket keeps the Low list', () => {
 		expect(run.stdout.indexOf('an open High finding')).toBeLessThan(
 			run.stdout.indexOf('Low findings for the owner')
 		);
+	});
+
+	it('also posts the list as the one PR comment when the PR exists', () => {
+		const run = runShell(
+			script('Low findings for the owner\n- src/a.ts:3 naming', '35'),
+			ghRecorder
+		);
+		const prComments = run.stdout.split('\n').filter((l) => l.startsWith('pr comment 35'));
+		expect(prComments).toHaveLength(1);
+		expect(prComments[0]).toContain('- src/a.ts:3 naming');
+	});
+
+	it('posts nothing on the PR when there is no PR yet or no list', () => {
+		expect(
+			runShell(script('Low findings for the owner\n- a', ''), ghRecorder).stdout
+		).not.toContain('pr comment');
+		expect(runShell(script('', '35'), ghRecorder).stdout).not.toContain('pr comment');
 	});
 
 	it('leaves the comment as it was when no round has produced a list yet', () => {
