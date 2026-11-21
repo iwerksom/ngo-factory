@@ -4,6 +4,7 @@ import {
 	currentGate,
 	fundingGoalUsd,
 	fundingProgress,
+	hasComparison,
 	isDelivered,
 	tokenCostUsd,
 	verdict
@@ -140,6 +141,43 @@ describe('compareEstimate', () => {
 		expect(() =>
 			compareEstimate({ gates: delivered, estimate, actual: { tokens: -5, humanHours: 1 } })
 		).toThrow(RangeError);
+	});
+});
+
+describe('hasComparison', () => {
+	const delivered = [{ status: 'passed' }] as Gate[];
+	const inProgress = [{ status: 'current' }] as Gate[];
+	const estimate = {} as Project['estimate'];
+	const actual = { tokens: 1, humanHours: 1 };
+
+	it('is true for a delivered project with recorded actuals', () => {
+		expect(hasComparison({ gates: delivered, actual })).toBe(true);
+	});
+
+	it('is true for a recorded actual of zero: zero is recorded, not missing', () => {
+		expect(hasComparison({ gates: delivered, actual: { tokens: 0, humanHours: 0 } })).toBe(true);
+	});
+
+	it('is false for a delivered project without actuals, the card in issue 39', () => {
+		expect(hasComparison({ gates: delivered })).toBe(false);
+	});
+
+	it('is false before delivery, even with actuals', () => {
+		expect(hasComparison({ gates: inProgress, actual })).toBe(false);
+	});
+
+	it('agrees with what the project page shows, for every case', () => {
+		const cases = [
+			{ gates: delivered, actual },
+			{ gates: delivered, actual: { tokens: 0, humanHours: 0 } },
+			{ gates: delivered },
+			{ gates: inProgress, actual },
+			{ gates: inProgress },
+			{ gates: [] as Gate[], actual }
+		];
+		for (const c of cases) {
+			expect(hasComparison(c)).toBe(compareEstimate({ ...c, estimate }).kind === 'recorded');
+		}
 	});
 });
 

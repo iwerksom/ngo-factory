@@ -42,6 +42,15 @@ export function isDelivered(project: Pick<Project, 'gates'>): boolean {
 	return project.gates.length > 0 && project.gates.every((gate) => gate.status === 'passed');
 }
 
+/**
+ * True when the project page has an estimate-versus-actual table to show: delivered, with actuals
+ * recorded (a recorded zero counts). A card on the list page says "comparison on its page" only
+ * when this is true, so it never promises what `compareEstimate` would answer `none` or `missing` to.
+ */
+export function hasComparison(project: Pick<Project, 'gates' | 'actual'>): boolean {
+	return isDelivered(project) && Boolean(project.actual);
+}
+
 export interface ComparisonRow {
 	label: string;
 	low: number;

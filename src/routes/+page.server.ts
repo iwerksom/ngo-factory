@@ -1,6 +1,12 @@
 import { GITHUB_ISSUES_REPO, GITHUB_TOKEN } from '$app/env/private';
 import { projects } from '#lib/data/projects.js';
-import { currentGate, fundingGoalUsd, fundingProgress, isDelivered } from '#lib/estimate.js';
+import {
+	currentGate,
+	fundingGoalUsd,
+	fundingProgress,
+	hasComparison,
+	isDelivered
+} from '#lib/estimate.js';
 import { loadTimeline } from '#lib/gates.js';
 import type { PageServerLoad } from './$types';
 
@@ -17,6 +23,8 @@ export const load: PageServerLoad = async ({ fetch }) => ({
 				summary: project.summary,
 				gate: currentGate(timeline.gates)?.name ?? 'Delivered',
 				delivered: isDelivered(timeline),
+				// The card links to the comparison only when the project page can show one.
+				hasComparison: hasComparison({ ...project, gates: timeline.gates }),
 				goalUsd: fundingGoalUsd(project),
 				raisedUsd: project.raisedUsd,
 				progress: fundingProgress(project)
