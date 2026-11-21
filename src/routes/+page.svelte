@@ -26,7 +26,8 @@
 				<p class="meta">Delivered. Estimate versus actual is on its page (simulated).</p>
 			{/if}
 			<progress value={project.progress} max="1" aria-label="Funding progress"></progress>
-			<p class="meta">${project.raisedUsd} of ${project.goalUsd} (simulated)</p>
+			<p class="meta">${project.raisedUsd} of ${project.goalUsd} raised so far</p>
+			<p class="meta">Full estimate versus actual comparison is on its page.</p>
 		</li>
 	{/each}
 </ul>
