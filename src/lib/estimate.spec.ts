@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	compareEstimate,
 	currentGate,
+	deliveredNote,
 	fundingGoalUsd,
 	fundingProgress,
 	hasComparison,
@@ -178,6 +179,24 @@ describe('hasComparison', () => {
 		for (const c of cases) {
 			expect(hasComparison(c)).toBe(compareEstimate({ ...c, estimate }).kind === 'recorded');
 		}
+	});
+});
+
+describe('deliveredNote, the line on a delivered card', () => {
+	it('says nothing before delivery', () => {
+		expect(deliveredNote({ delivered: false, hasComparison: false })).toBeNull();
+	});
+
+	it('points to the comparison only when the page has one', () => {
+		expect(deliveredNote({ delivered: true, hasComparison: true })).toBe(
+			'Delivered. Estimate versus actual is on its page (simulated).'
+		);
+	});
+
+	it('says actuals are not recorded when the page has no comparison, marked simulated', () => {
+		const note = deliveredNote({ delivered: true, hasComparison: false });
+		expect(note).toBe('Delivered. Actuals not recorded yet (simulated).');
+		expect(note).not.toMatch(/on its page/);
 	});
 });
 

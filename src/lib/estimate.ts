@@ -1,4 +1,4 @@
-import type { Gate, Project } from '#lib/types.js';
+import type { Actual, Gate, Project } from '#lib/types.js';
 
 /** Blended price per million tokens across input, output and cache. A deliberately rough planning number. */
 export const USD_PER_MILLION_TOKENS = 8;
@@ -44,11 +44,21 @@ export function isDelivered(project: Pick<Project, 'gates'>): boolean {
 
 /**
  * True when the project page has an estimate-versus-actual table to show: delivered, with actuals
- * recorded (a recorded zero counts). A card on the list page says "comparison on its page" only
- * when this is true, so it never promises what `compareEstimate` would answer `none` or `missing` to.
+ * recorded (a recorded zero counts). `compareEstimate` asks this same question, so the page and the
+ * list card cannot disagree. A card says "comparison on its page" only when this is true.
  */
-export function hasComparison(project: Pick<Project, 'gates' | 'actual'>): boolean {
+export function hasComparison<T extends Pick<Project, 'gates' | 'actual'>>(
+	project: T
+): project is T & { actual: Actual } {
 	return isDelivered(project) && Boolean(project.actual);
+}
+
+/** The line a delivered card shows under its gate: what its page really has. `null` when not delivered. */
+export function deliveredNote(card: { delivered: boolean; hasComparison: boolean }): string | null {
+	if (!card.delivered) return null;
+	return card.hasComparison
+		? 'Delivered. Estimate versus actual is on its page (simulated).'
+		: 'Delivered. Actuals not recorded yet (simulated).';
 }
 
 export interface ComparisonRow {
@@ -70,7 +80,7 @@ export function compareEstimate(
 	project: Pick<Project, 'gates' | 'estimate' | 'actual'>
 ): EstimateComparison {
 	if (!isDelivered(project)) return { kind: 'none' };
-	if (!project.actual) return { kind: 'missing' };
+	if (!hasComparison(project)) return { kind: 'missing' };
 
 	const { estimate, actual } = project;
 	return {
