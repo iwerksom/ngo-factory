@@ -22,8 +22,8 @@
 			<p class="meta">{project.ngo} · {project.region}</p>
 			<p>{project.summary}</p>
 			<p class="gate">Now at gate: <strong>{project.gate}</strong></p>
-			{#if project.delivered}
-				<p class="meta">Delivered. Estimate versus actual is on its page (simulated).</p>
+			{#if project.deliveredNote}
+				<p class="meta">{project.deliveredNote}</p>
 			{/if}
 			<progress value={project.progress} max="1" aria-label="Funding progress"></progress>
 			<p class="meta">${project.raisedUsd} of ${project.goalUsd} (simulated)</p>
