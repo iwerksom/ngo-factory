@@ -93,4 +93,5 @@ A finding's level is the group it is listed under in Qodo's "Code Review by Qodo
 
 - One topic per PR, linked to an issue.
 - Describe what changed and how you verified it. Say what is not verified.
+- Link the ticket (`Closes #N`) and, for each acceptance item or test case in it, name the test or check that covers it. Qodo's ticket check is extra evidence, not the proof: a review with no finding does not show the item is met.
 - Qodo review comments are answered or fixed before merge.
